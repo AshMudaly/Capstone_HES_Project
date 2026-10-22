@@ -290,7 +290,7 @@ void loop() {
 
   const __FlashStringHelper *stopReason = nullptr;
   if (state == RUNNING) {
-    if (currentA > MAX_CURRENT_A) {
+    if (fabs(currentA) > MAX_CURRENT_A) {
       stopReason = F("over current");
     } else if (busV < MIN_BUS_V) {
       stopReason = F("under voltage");

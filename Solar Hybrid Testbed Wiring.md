@@ -95,19 +95,23 @@ This follows the Skywalker V2 manual you sent. Your ESC label (V2-UBEC, 3–6S, 
 
 **Check before the panels go live.** The SmartSolar picks 12 V or 24 V once, on its first power-up (10 s wait, then an averaged reading), and the manual does not give the switching voltage. A full 4S pack sits at 16.8 V, so confirm in VictronConnect that the system voltage reads 12 V, and change it there if it does not. Reverse battery polarity is not protected and is not covered by warranty, so check BATT + and − twice.
 
-## Build order
+## Phase 2 build order — blocked pending safety and firmware checks
+
+**Do not connect the PV string or run hybrid tests yet.** The pack has no BMS, so cell-level charge protection and balancing must be verified before charging. Also, the current logger reads only INA260 #1 at `0x40`; it cannot monitor INA260 #2 or #3 or validate hybrid current. The steps below are planning notes only until the pack charging safety is independently confirmed and Phase 2 firmware is implemented and tested.
 
 1. Join the panels in series: mate Panel 1 + to Panel 2 −, and Panel 2 + to Panel 3 −. Keep them covered and leave the two end leads free.
 2. Check the string in sun with nothing else connected: Voc about 29–32 V, Isc about 5–6 A.
 3. Build the solar branch off the bus: MPPT BAT+ to the 25 A fuse, to INA260 #2 VIN+, then VIN− to Bus + way 3. MPPT BAT− to Bus − way 3. Use flexible fine-strand copper. Leave the PV terminals empty.
 4. Bus join: connect the branch to way 3 on both blocks with the motor idle. The MPPT only powers up from the pack, so this comes before the panels.
-5. Wait 10 seconds, then open VictronConnect on your phone (Bluetooth is built in; the default PIN is 000000, and the PUK on the unit's sticker resets it). Confirm the battery voltage reads 12 V and apply the settings below. The Windows version of the app has no Bluetooth.
-6. Last link: with the panels covered, connect the string to PV+ and PV−, then uncover them. Watch the app and INA260 #2.
-7. Hybrid runs: pick throttle steps where charge into the pack stays under 2 A, and never above 4 A.
+5. **Blocked:** do not configure the MPPT to charge this pack. After the pack protection is verified, use VictronConnect to check the system voltage and have the charge settings reviewed against the exact pack and cell specifications. The Windows version of the app has no Bluetooth.
+6. **Blocked:** do not connect the string to PV+ and PV− or uncover the panels until the charging safety checks above are complete.
+7. **Blocked:** do not run hybrid tests until Phase 2 firmware measures and logs the required sensor readings and the charge current limits have been verified.
 
 The complete shared-bus schematic. Amber parts are new in Phase 2, grey parts were built in Phase 1, and the dashed amber box is an optional third sensor.
 
 ## MPPT settings VictronConnect
+
+**Do not use these settings to charge the pack yet.** The pack has no BMS, and a pack-level voltage setting does not protect individual cells from overcharge or imbalance. Before connecting PV for charging, verify cell-level overvoltage protection and balancing are present and suitable, and confirm the charge limits against the exact cell and pack specifications. The values below are unverified notes, not an approved charging configuration.
 
 | Setting | Value | Reason |
 | --- | --- | --- |
@@ -121,7 +125,7 @@ The complete shared-bus schematic. Amber parts are new in Phase 2, grey parts we
 | Absorption limit | 1 h, tail 0.4 A | My suggestion (about C/10). The manual default is 6 h |
 | Max charge current | 12 A | Keeps INA260 #2 under 15 A |
 
-The manual does not list the settable voltage ranges. If the app rejects 16.6 V or 16.0 V, note the limit it shows and send it to me.
+The manual does not list the settable voltage ranges. If the app rejects 16.6 V or 16.0 V, note the limit it shows. This does not establish that either value is safe for this pack.
 
 ## Fuses
 
@@ -228,7 +232,7 @@ Everything the Arduino talks to. The INA260 VIN+ and VIN− terminals are the po
 
 Lines starting with `#` are comments. The Phase 1 sketch reads one INA260. Phase 2 needs an updated sketch that also reads 0x41 and 0x44.
 
-Two test cases. Test case 1 proves the wiring is safe and the software logs correctly, with no motor. Test case 2 brings in the ESC, motor, load cell and propeller. Do not start test case 2 until every pass box in test case 1 is ticked.
+Two test cases. Test case 1 checks that the software logs correctly, with no motor. Test case 2 brings in the ESC, motor, load cell and propeller. Do not start test case 2 until every pass box in test case 1 is ticked. These checks do not certify the wiring as safe.
 
 ## What is plugged in at each stage
 
@@ -319,7 +323,7 @@ Select the esc_setup environment, upload, open the monitor, and follow the "ESC 
 4. Type `g`. After 3 s the motor starts on the first step. Watch the direction, the smoothness, and the `current` value rising with each step. Type `x` after a few steps, or let it complete. Once a run has ended the sketch does nothing more, so press RESET before the next run.
 5. If the direction is wrong, disconnect the pack and swap any two of the three motor wires.
 
-**Pass:** correct direction, smooth at every step, current rising with throttle and staying low with no prop (a few amps at most, my estimate), the bus voltage steady, and nothing getting hot.
+**Pass:** correct direction, smooth at every step, current reading positive and rising with throttle while staying low with no prop (a few amps at most, my estimate), the bus voltage steady, and nothing getting hot. If current is negative, does not respond as expected, or is inconsistent with the meter, stop, disconnect the pack, and correct/check sensor orientation and wiring. Do not proceed to the propeller test until current reads positive and the cutoff has been verified.
 
 ### 2C. Load cell calibration (USB only, no pack)
 
@@ -332,13 +336,15 @@ Select the esc_setup environment, upload, open the monitor, and follow the "ESC 
 
 ### 2D. Propeller sweep
 
+**Do not run this test until the prop-off test confirms that INA260 #1 reads positive current under load and the logger version with the magnitude-based 12 A cutoff is uploaded.** Do not deliberately exceed the cutoff to test it; correct sensor orientation is still required for meaningful data.
+
 1. Fit the 9×4.5E prop with the rig clamped, the guard in place, and your safety checklist done. Reset the board and confirm `# ready`.
 2. Connect the pack through the precharge lead, then direct. Check the idle line.
 3. Type `g`. The sweep ends by itself on `over current` (above 12 A), `under voltage` (below 12.0 V), `over thrust` (above 3000 g), or `sequence complete`. `x` stops it at any time.
 4. Disconnect the pack straight afterwards and feel the ESC, motor and pack for heat. Then take the SD card out.
 5. Write down the run file name, the idle voltage before the run, the prop and the ESC settings in your lab notes.
 
-**Pass:** the sweep completes, or stops for a reason you can explain. Thrust and current both rise with each step, the current stays under 12 A (I estimated 5–8 A at full throttle), and the CSV is complete.
+**Pass:** the sweep completes, or stops for a reason you can explain. Thrust and positive current both rise with each step, the current stays under 12 A (I estimated 5–8 A at full throttle), and the CSV is complete.
 
 ## Reading the data
 
