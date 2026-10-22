@@ -49,6 +49,7 @@ const float MAX_BUS_V   = CELLS * MAX_CELL_V + 0.1;  // 16.9 V, above a full pac
 // ---------- Limits ----------
 // INA260 is rated 15 A and the battery lead has a 15 A fuse, so 12 A keeps an 80% margin.
 const float MAX_CURRENT_A      = 12.0;
+
 const float MAX_IDLE_CURRENT_A = 0.5;     // motor off must read about 0 A
 const float MAX_THRUST_G       = 3000.0;  // load cell is 10 kg; only checked once calibrated
 
