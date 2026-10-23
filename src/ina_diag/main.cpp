@@ -133,8 +133,10 @@ void setup() {
   Serial.println(F("# WITH_SERVO: ESC pin attached, 1000 us"));
 #endif
 #ifdef WITH_PWM
+  const uint32_t pwmPeriodUs = 20000UL;
+  const uint32_t pwmPulseUs = 1000UL;
   Serial.print(F("# WITH_PWM: hardware PWM on D9, 20000 us period, 1000 us pulse, begin="));
-  Serial.println(escPwm.begin(20000, 1000));
+  Serial.println(escPwm.begin(pwmPeriodUs, pwmPulseUs));
 #endif
   Wire.begin();
   // Same settings the logger applies through the Adafruit library: 16 averages, 1.1 ms conversions, continuous.
