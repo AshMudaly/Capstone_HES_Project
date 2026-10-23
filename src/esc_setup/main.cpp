@@ -12,16 +12,16 @@
 // Powers up at 1000 us. The ESC reads the stick position when the pack is connected, so send u BEFORE connecting
 // the pack when you want calibration or programming. Procedure: see the Phase 1 tab of the wiring page.
 
-#include <Servo.h>
+#include "pwm.h"
 
 const uint8_t  ESC_PIN     = 9;
 const uint16_t BOTTOM_US   = 1000;
 const uint16_t TOP_US      = 2000;
 
-Servo esc;
+PwmOut esc(ESC_PIN);  // hardware PWM, 50 Hz
 
 void setPulse(uint16_t us) {
-  esc.writeMicroseconds(us);
+  if (!esc.pulseWidth_us(us)) Serial.println(F("# PWM update failed"));
   Serial.print(F("# throttle "));
   Serial.print(us);
   Serial.println(F(" us"));
@@ -29,8 +29,10 @@ void setPulse(uint16_t us) {
 
 void setup() {
   Serial.begin(115200);
-  esc.attach(ESC_PIN);
-  esc.writeMicroseconds(BOTTOM_US);
+  if (!esc.begin(20000u, (uint32_t)BOTTOM_US)) {
+    Serial.println(F("# PWM failed to start on D9"));
+    while (true) {}
+  }
   Serial.println(F("# ESC setup helper. Prop off. u = 2000 us (top), d = 1000 us (bottom). Now 1000 us."));
 }
 

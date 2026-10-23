@@ -1,0 +1,5 @@
+# cells=4 min_bus_V=12.0 max_current_A=12.0 hold_ms=5000 build=logger_nosd
+ms,throttle_us,bus_V,current_A,power_W,energy_Wh,net_counts,thrust_g
+# counts_per_g=0.0000
+# STOP: INA260 read failed
+# energy_Wh: 0.010
