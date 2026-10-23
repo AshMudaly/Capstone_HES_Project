@@ -39,6 +39,22 @@ const uint8_t HX_SCK_PIN = 3;
 // the first bits of every word read wrong. The HX711 resets if SCK stays high longer than 60 us.
 const uint8_t HX_PULSE_US = 25;
 
+#ifdef HX_TIMING
+// Diagnostic build (platformio.ini env logger_hxtime), normally not defined. The question it answers: are the
+// corrupted load cell rows the reads where something stretched an SCK-high phase (timing), or do they have a
+// normal clock (electrical noise on DT/SCK)? Every read records its longest SCK-high phase and its total
+// duration, and each CSV row carries the figures of the read that produced its net_counts.
+// The clock is timed around the high phase (just before the rising edge to just after the falling edge), so the
+// timing calls add nothing inside it. The figure includes the two digitalWrite calls, so a normal high phase
+// reads a little above HX_PULSE_US. The overrun flag uses 40 us: clearly above normal, below the 60 us reset limit.
+const uint32_t HX_OVERRUN_US = 40;
+uint32_t hxLastMaxHighUs = 0;  // longest SCK-high phase of the most recent read
+uint32_t hxLastReadUs    = 0;  // duration of the most recent read
+uint32_t hxReads         = 0;  // counted from 'g'
+uint32_t hxOverruns      = 0;  // reads with a high phase over HX_OVERRUN_US, counted from 'g'
+uint32_t hxMaxHighUs     = 0;  // worst high phase, counted from 'g'
+#endif
+
 // ---------- Pack (datasheet: max charge 4.20 V, recommended cut-off 3.00 V, absolute 2.75 V) ----------
 const uint8_t CELLS            = 4;
 const float   MAX_CELL_V       = 4.20;
@@ -108,17 +124,42 @@ bool hxWaitReady(uint32_t timeoutMs) {
 // Interrupts stay enabled: an interrupt can only lengthen the clock-high time by a few us, far below the
 // 60 us reset limit.
 long hxRead() {
+#ifdef HX_TIMING
+  uint32_t readStartUs = micros();
+  uint32_t maxHighUs = 0;
+  uint32_t highStartUs = 0;
+  uint32_t highUs = 0;
+#endif
   uint32_t word = 0;
   for (uint8_t i = 0; i < 24; i++) {
+#ifdef HX_TIMING
+    highStartUs = micros();
+#endif
     digitalWrite(HX_SCK_PIN, HIGH);
     delayMicroseconds(HX_PULSE_US);
     word = (word << 1) | (digitalRead(HX_DT_PIN) ? 1 : 0);
     digitalWrite(HX_SCK_PIN, LOW);
+#ifdef HX_TIMING
+    highUs = micros() - highStartUs;
+    if (highUs > maxHighUs) maxHighUs = highUs;
+#endif
     delayMicroseconds(HX_PULSE_US);
   }
+#ifdef HX_TIMING
+  highStartUs = micros();
+#endif
   digitalWrite(HX_SCK_PIN, HIGH);  // 25th pulse selects channel A, gain 128 for the next conversion
   delayMicroseconds(HX_PULSE_US);
   digitalWrite(HX_SCK_PIN, LOW);
+#ifdef HX_TIMING
+  highUs = micros() - highStartUs;
+  if (highUs > maxHighUs) maxHighUs = highUs;
+  hxLastMaxHighUs = maxHighUs;
+  hxLastReadUs = micros() - readStartUs;
+  hxReads++;
+  if (maxHighUs > HX_OVERRUN_US) hxOverruns++;
+  if (maxHighUs > hxMaxHighUs) hxMaxHighUs = maxHighUs;
+#endif
   if (word & 0x800000UL) word |= 0xFF000000UL;  // sign-extend 24 -> 32 bit
   return (int32_t)word;
 }
@@ -151,6 +192,19 @@ void motorOff() {
   escWrite(THROTTLE_OFF_US);
 }
 
+#ifdef HX_TIMING
+void printHxSummary(Print &out) {
+  out.print(F("# hx_reads="));
+  out.print(hxReads);
+  out.print(F(" hx_overruns_over_"));
+  out.print(HX_OVERRUN_US);
+  out.print(F("us="));
+  out.print(hxOverruns);
+  out.print(F(" hx_max_high_us="));
+  out.println(hxMaxHighUs);
+}
+#endif
+
 void finishRun(const __FlashStringHelper *reason) {
   state = STOPPED;
   // The file records why the run ended, so a CSV on its own tells the whole story.
@@ -158,12 +212,18 @@ void finishRun(const __FlashStringHelper *reason) {
   logFile.println(reason);
   logFile.print(F("# energy_Wh: "));
   logFile.println(energyWh, 3);
+#ifdef HX_TIMING
+  printHxSummary(logFile);
+#endif
   logFile.flush();
   logFile.close();
   Serial.print(F("# STOP: "));
   Serial.println(reason);
   Serial.print(F("# energy_Wh: "));
   Serial.println(energyWh, 3);
+#ifdef HX_TIMING
+  printHxSummary(Serial);
+#endif
 }
 
 bool openLogFile() {
@@ -197,11 +257,24 @@ void writeRow(Print &out, uint16_t sampledUs, float busV, float currentA, float 
   out.print(',');
   out.print(netCounts);
   out.print(',');
+#ifdef HX_TIMING
+  // Last two columns are the timing of the read that produced net_counts (see the HX_TIMING comment).
+  if (countsPerG != 0.0) {
+    out.print(thrustG, 1);
+  } else {
+    out.print(F("NA"));
+  }
+  out.print(',');
+  out.print(hxLastMaxHighUs);
+  out.print(',');
+  out.println(hxLastReadUs);
+#else
   if (countsPerG != 0.0) {
     out.println(thrustG, 1);
   } else {
     out.println(F("NA"));
   }
+#endif
 }
 
 void tare() {
@@ -381,6 +454,11 @@ void startSweep() {
   }
   logFile.print(F("# counts_per_g="));
   logFile.println(countsPerG, 4);
+#ifdef HX_TIMING
+  hxReads = 0;
+  hxOverruns = 0;
+  hxMaxHighUs = 0;
+#endif
   armStartMs = millis();
   state = ARMING;
   Serial.println(F("# arming, ESC held at 1000 us"));
@@ -454,12 +532,21 @@ void setup() {
   logFile.println(F(" build=logger_nosd"));
 #elif defined(NO_SERIAL_ROWS)
   logFile.println(F(" build=logger_noserial"));
+#elif defined(HX_TIMING)
+  logFile.println(F(" build=logger_hxtime"));
 #else
   logFile.println(F(" build=logger"));
 #endif
+#ifdef HX_TIMING
+  const __FlashStringHelper *header = F("ms,throttle_us,bus_V,current_A,power_W,energy_Wh,net_counts,thrust_g,hx_max_high_us,hx_read_us");
+#else
   const __FlashStringHelper *header = F("ms,throttle_us,bus_V,current_A,power_W,energy_Wh,net_counts,thrust_g");
+#endif
   logFile.println(header);
   Serial.println(header);
+#ifdef HX_TIMING
+  Serial.println(F("# build=logger_hxtime (HX711 timing columns on)"));
+#endif
 
   Serial.println(F("# ready. connect the pack through the precharge lead, then send g"));
 }
