@@ -22,7 +22,8 @@ A run counts only if it ended with `# STOP: sequence complete`.
 ## Provenance
 
 - Each run file is a verbatim slice of a serial-monitor capture as it was pasted for review. Nothing in it was edited. `runs.csv` holds the SHA-256 of each run file and of the capture it came from. The original `log2file` captures on the logging laptop remain the master copies. Add them to `logs/` if they differ from these.
-- B1: the capture starts after the run's `# logging to` line, so its SD run number is inferred. The next two boots in the capture are RUN41 and RUN42, so B1 is taken to be RUN40.
-- Hybrid runs: both captures start part-way through the idle readout, so their run numbers are not recorded.
+- Run numbers: each run's SD file on `DAta/` (`RUNnn.CSV`, header and footer only) carries the same energy totals as its serial capture. `sd_footer_check` in `runs.csv` records that comparison. It fixed B1 as RUN40 and the two hybrid captures as RUN37 and RUN38. The captures of B1 and the hybrid runs start part-way through the idle readout, so their own `# logging to` lines are missing.
+- RUN39 completed as a hybrid run (SD footer: ESC 0.307 Wh, solar 0.074 Wh, pack 0.234 Wh), but its serial rows were not in the captures reviewed. Add its capture to `hybrid/`.
+- RUN41, RUN44 and RUN47 are boots with no sweep (empty SD files).
 - Firmware: no commit matches the firmware that produced these runs (7-step sweep with `COUNTS_PER_G = 0.0`). Tag the commit once that is restored and record it in `runs.csv`.
 - Still to fill in `runs.csv` for each run: `time_local`, and for hybrid runs `sky` and `panel_tilt`.
