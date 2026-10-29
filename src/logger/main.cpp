@@ -87,7 +87,7 @@ const uint32_t IDLE_PRINT_MS   = 1000;
 
 // Counts per gram. 0 = uncalibrated (thrust logs as NA, thrust cut-off off).
 // Calibrate with the c command, then paste the printed value here.
-const float COUNTS_PER_G = 200.0;
+const float COUNTS_PER_G = 0;
 
 enum State { IDLE, ARMING, RUNNING, STOPPED };
 
