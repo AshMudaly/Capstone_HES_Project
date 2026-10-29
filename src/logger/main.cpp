@@ -7,7 +7,7 @@
 //   D9  ESC signal (ESC red/BEC wire removed from the plug)
 //   D10 SD chip select, D11 MOSI, D12 MISO, D13 SCK
 //   D2  HX711 DT, D3 HX711 SCK
-//   A4/A5 INA260 SDA/SCL, INA260 on the ESC branch at address 0x40
+//   A4/A5 INA260 SDA/SCL, three INA260s: ESC branch 0x40, solar branch 0x41 (A0 bridged), pack lead 0x44 (A1 bridged)
 //
 // Libraries: SD. The HX711 and the INA260 are driven directly (see hxRead, readIna). The ESC pulse comes from a hardware
 // PWM timer (PwmOut), not the Servo library: the Servo timer interrupt made the I2C reads fail.
@@ -19,7 +19,9 @@
 //   c<grams> calibrate with a known mass on the cell, e.g. c500 (IDLE only)
 //
 // One run = one power-up. Each boot opens a new RUNnn.CSV on the SD card.
-// CSV rows: ms,throttle_us,bus_V,current_A,power_W,energy_Wh,net_counts,thrust_g
+// CSV rows: ms,throttle_us,bus_V,current_A,power_W,energy_Wh,net_counts,thrust_g,solar_A,solar_W,solar_Wh,batt_V,batt_A,batt_W,batt_Wh
+// bus_V, current_A, power_W, energy_Wh are the ESC branch. solar_* is positive when the MPPT feeds the bus, batt_* is
+// positive when the pack discharges. Power is bus voltage x current, so it is negative when the pack charges.
 // Lines starting with '#' are comments (pandas: comment='#').
 //
 // Endurance run: set STEPS_US to a single value and HOLD_MS very large. The
@@ -105,6 +107,15 @@ long zeroCounts = 0;
 long netCounts = 0;
 float countsPerG = COUNTS_PER_G;
 float energyWh = 0.0;
+float solarWh = 0.0;
+float battWh = 0.0;
+
+// One INA260 sample. powerW is busV x currentA, so it carries the current's sign.
+struct InaReading {
+  float busV = 0;
+  float currentA = 0;
+  float powerW = 0;
+};
 
 // ---------- HX711 (24-bit, channel A, gain 128) ----------
 bool hxReady() {
@@ -212,6 +223,10 @@ void finishRun(const __FlashStringHelper *reason) {
   logFile.println(reason);
   logFile.print(F("# energy_Wh: "));
   logFile.println(energyWh, 3);
+  logFile.print(F("# solar_Wh: "));
+  logFile.println(solarWh, 3);
+  logFile.print(F("# batt_Wh: "));
+  logFile.println(battWh, 3);
 #ifdef HX_TIMING
   printHxSummary(logFile);
 #endif
@@ -221,6 +236,10 @@ void finishRun(const __FlashStringHelper *reason) {
   Serial.println(reason);
   Serial.print(F("# energy_Wh: "));
   Serial.println(energyWh, 3);
+  Serial.print(F("# solar_Wh: "));
+  Serial.println(solarWh, 3);
+  Serial.print(F("# batt_Wh: "));
+  Serial.println(battWh, 3);
 #ifdef HX_TIMING
   printHxSummary(Serial);
 #endif
@@ -242,39 +261,48 @@ bool openLogFile() {
 }
 
 // throttle_us is the value in force when the sample was taken, so a stop row keeps the step that caused it.
-void writeRow(Print &out, uint16_t sampledUs, float busV, float currentA, float powerW, float thrustG) {
+void writeRow(Print &out, uint16_t sampledUs, const InaReading &inaEsc, const InaReading &inaSolar, const InaReading &inaBatt, float thrustG) {
   out.print(millis());
   out.print(',');
   out.print(sampledUs);
   out.print(',');
-  out.print(busV, 3);
+  out.print(inaEsc.busV, 3);
   out.print(',');
-  out.print(currentA, 3);
+  out.print(inaEsc.currentA, 3);
   out.print(',');
-  out.print(powerW, 2);
+  out.print(inaEsc.powerW, 2);
   out.print(',');
   out.print(energyWh, 4);
   out.print(',');
   out.print(netCounts);
   out.print(',');
-#ifdef HX_TIMING
-  // Last two columns are the timing of the read that produced net_counts (see the HX_TIMING comment).
   if (countsPerG != 0.0) {
     out.print(thrustG, 1);
   } else {
     out.print(F("NA"));
   }
   out.print(',');
+  out.print(inaSolar.currentA, 3);
+  out.print(',');
+  out.print(inaSolar.powerW, 2);
+  out.print(',');
+  out.print(solarWh, 4);
+  out.print(',');
+  out.print(inaBatt.busV, 3);
+  out.print(',');
+  out.print(inaBatt.currentA, 3);
+  out.print(',');
+  out.print(inaBatt.powerW, 2);
+  out.print(',');
+  out.print(battWh, 4);
+#ifdef HX_TIMING
+  // Last two columns are the timing of the read that produced net_counts (see the HX_TIMING comment).
+  out.print(',');
   out.print(hxLastMaxHighUs);
   out.print(',');
-  out.println(hxLastReadUs);
-#else
-  if (countsPerG != 0.0) {
-    out.println(thrustG, 1);
-  } else {
-    out.println(F("NA"));
-  }
+  out.print(hxLastReadUs);
 #endif
+  out.println();
 }
 
 void tare() {
@@ -305,11 +333,12 @@ void calibrate(float knownG) {
 // bring it high. An interrupt can only make a clock phase longer, which I2C allows.
 const uint8_t  INA_SDA_PIN    = A4;
 const uint8_t  INA_SCL_PIN    = A5;
-const uint8_t  INA_ADDR       = 0x40;
+const uint8_t  INA_ESC_ADDR   = 0x40;  // ESC branch, no jumpers
+const uint8_t  INA_SOLAR_ADDR = 0x41;  // solar branch, A0 bridged
+const uint8_t  INA_BATT_ADDR  = 0x44;  // pack lead, A1 bridged
 const uint8_t  INA_REG_CONFIG = 0x00;
 const uint8_t  INA_REG_CUR    = 0x01;
 const uint8_t  INA_REG_BUSV   = 0x02;
-const uint8_t  INA_REG_POWER  = 0x03;
 const uint8_t  INA_REG_MFR_ID = 0xFE;
 const uint16_t INA_MFR_ID_TI  = 0x5449;
 const uint16_t INA_CONFIG     = 0x6527;  // 16 averages, 1.1 ms conversions, continuous (reset value 0x6127 is 1 average)
@@ -394,42 +423,47 @@ bool i2cRead(uint8_t &value, bool ack) {
   return true;
 }
 
-bool inaReadReg(uint8_t reg, uint16_t &value) {
+bool inaReadReg(uint8_t addr, uint8_t reg, uint16_t &value) {
   uint8_t hi = 0, lo = 0;
   bool ok = i2cStart()
-         && i2cWrite(INA_ADDR << 1) && i2cWrite(reg)
+         && i2cWrite(addr << 1) && i2cWrite(reg)
          && i2cStart()
-         && i2cWrite((INA_ADDR << 1) | 1)
+         && i2cWrite((addr << 1) | 1)
          && i2cRead(hi, true) && i2cRead(lo, false);
   i2cStop();
   value = ((uint16_t)hi << 8) | lo;
   return ok;
 }
 
-bool inaWriteReg(uint8_t reg, uint16_t value) {
+bool inaWriteReg(uint8_t addr, uint8_t reg, uint16_t value) {
   bool ok = i2cStart()
-         && i2cWrite(INA_ADDR << 1) && i2cWrite(reg) && i2cWrite(value >> 8) && i2cWrite(value & 0xFF);
+         && i2cWrite(addr << 1) && i2cWrite(reg) && i2cWrite(value >> 8) && i2cWrite(value & 0xFF);
   i2cStop();
   return ok;
 }
 
-// Reads bus voltage (1.25 mV/LSB), current (signed, 1.25 mA/LSB) and power (10 mW/LSB). False if any transfer failed.
-bool readIna(float &busV, float &currentA, float &powerW) {
-  uint16_t bus = 0, cur = 0, pow = 0;
-  if (!inaReadReg(INA_REG_BUSV, bus) || !inaReadReg(INA_REG_CUR, cur) || !inaReadReg(INA_REG_POWER, pow)) return false;
-  busV = bus * 0.00125f;
-  currentA = (int16_t)cur * 0.00125f;
-  powerW = pow * 0.01f;
+// Reads bus voltage (1.25 mV/LSB) and current (signed, 1.25 mA/LSB). Power is computed here as their product, so it
+// carries the current's sign (the battery branch goes negative while the pack charges). False if any transfer failed.
+bool readIna(uint8_t addr, InaReading &r) {
+  uint16_t bus = 0, cur = 0;
+  if (!inaReadReg(addr, INA_REG_BUSV, bus) || !inaReadReg(addr, INA_REG_CUR, cur)) return false;
+  r.busV = bus * 0.00125f;
+  r.currentA = (int16_t)cur * 0.00125f;
+  r.powerW = r.busV * r.currentA;
   return true;
 }
 
+bool readAllIna(InaReading &inaEsc, InaReading &inaSolar, InaReading &inaBatt) {
+  return readIna(INA_ESC_ADDR, inaEsc) && readIna(INA_SOLAR_ADDR, inaSolar) && readIna(INA_BATT_ADDR, inaBatt);
+}
+
 // True if a TI INA260 answers, and it is then configured.
-bool inaInit() {
+bool inaInit(uint8_t addr) {
   lineRelease(INA_SDA_PIN);
   lineRelease(INA_SCL_PIN);
   uint16_t id = 0;
-  if (!inaReadReg(INA_REG_MFR_ID, id) || id != INA_MFR_ID_TI) return false;
-  return inaWriteReg(INA_REG_CONFIG, INA_CONFIG);
+  if (!inaReadReg(addr, INA_REG_MFR_ID, id) || id != INA_MFR_ID_TI) return false;
+  return inaWriteReg(addr, INA_REG_CONFIG, INA_CONFIG);
 }
 
 // Returns nullptr when the sweep may start, otherwise the reason it must not.
@@ -441,12 +475,12 @@ const __FlashStringHelper *preflightFailure(float busV, float currentA) {
 }
 
 void startSweep() {
-  float busV = 0, currentA = 0, powerW = 0;
-  if (!readIna(busV, currentA, powerW)) {
+  InaReading inaEsc, inaSolar, inaBatt;
+  if (!readAllIna(inaEsc, inaSolar, inaBatt)) {
     Serial.println(F("# NOT STARTED: INA260 read failed (I2C), try g again"));
     return;
   }
-  const __FlashStringHelper *problem = preflightFailure(busV, currentA);
+  const __FlashStringHelper *problem = preflightFailure(inaEsc.busV, inaEsc.currentA);
   if (problem) {
     Serial.print(F("# NOT STARTED: "));
     Serial.println(problem);
@@ -500,8 +534,8 @@ void setup() {
     while (true) {}
   }
 
-  if (!inaInit()) {
-    Serial.println(F("# INA260 not found, check SDA/SCL/power"));
+  if (!inaInit(INA_ESC_ADDR) || !inaInit(INA_SOLAR_ADDR) || !inaInit(INA_BATT_ADDR)) {
+    Serial.println(F("# INA260 not found at 0x40, 0x41 or 0x44, run ina_scan"));
     while (true) {}
   }
 
@@ -538,10 +572,11 @@ void setup() {
   logFile.println(F(" build=logger"));
 #endif
 #ifdef HX_TIMING
-  const __FlashStringHelper *header = F("ms,throttle_us,bus_V,current_A,power_W,energy_Wh,net_counts,thrust_g,hx_max_high_us,hx_read_us");
+  const __FlashStringHelper *header = F("ms,throttle_us,bus_V,current_A,power_W,energy_Wh,net_counts,thrust_g,solar_A,solar_W,solar_Wh,batt_V,batt_A,batt_W,batt_Wh,hx_max_high_us,hx_read_us");
 #else
-  const __FlashStringHelper *header = F("ms,throttle_us,bus_V,current_A,power_W,energy_Wh,net_counts,thrust_g");
+  const __FlashStringHelper *header = F("ms,throttle_us,bus_V,current_A,power_W,energy_Wh,net_counts,thrust_g,solar_A,solar_W,solar_Wh,batt_V,batt_A,batt_W,batt_Wh");
 #endif
+  logFile.println(F("# solar_* is INA260 0x41, positive when the MPPT feeds the bus. batt_* is INA260 0x44, positive when the pack discharges."));
   logFile.println(header);
   Serial.println(header);
 #ifdef HX_TIMING
@@ -557,8 +592,9 @@ void loop() {
   if (state == STOPPED) return;
 
   uint32_t now = millis();
-  float busV = 0, currentA = 0, powerW = 0;
-  bool inaFailed = !readIna(busV, currentA, powerW);
+  InaReading inaEsc, inaSolar, inaBatt;
+  bool inaFailed = !readAllIna(inaEsc, inaSolar, inaBatt);
+  float busV = inaEsc.busV, currentA = inaEsc.currentA;
   uint16_t sampledUs = throttleUs;
   if (inaFailed && (state == ARMING || state == RUNNING)) {
     motorOff();
@@ -567,7 +603,10 @@ void loop() {
   }
 
   if (state == RUNNING) {
-    energyWh += powerW * (now - lastLoopMs) / 3600000.0;
+    double dtH = (now - lastLoopMs) / 3600000.0;
+    energyWh += inaEsc.powerW * dtH;
+    solarWh += inaSolar.powerW * dtH;
+    battWh += inaBatt.powerW * dtH;
   }
   lastLoopMs = now;
 
@@ -581,6 +620,8 @@ void loop() {
 
   if (state == ARMING && now - armStartMs >= ARM_MS) {
     energyWh = 0.0;
+    solarWh = 0.0;
+    battWh = 0.0;
     beginStep(0, now);
     state = RUNNING;
   }
@@ -607,10 +648,10 @@ void loop() {
   if (logging && (stopReason || now - lastLogMs >= LOG_PERIOD_MS)) {
     lastLogMs = now;
 #ifndef NO_SERIAL_ROWS  // diagnostic switch (platformio.ini env logger_noserial), normally not defined
-    writeRow(Serial, sampledUs, busV, currentA, powerW, thrustG);
+    writeRow(Serial, sampledUs, inaEsc, inaSolar, inaBatt, thrustG);
 #endif
 #ifndef NO_SD_ROWS      // diagnostic switch (env logger_nosd), normally not defined
-    writeRow(logFile, sampledUs, busV, currentA, powerW, thrustG);
+    writeRow(logFile, sampledUs, inaEsc, inaSolar, inaBatt, thrustG);
 #endif
   }
 #ifndef NO_SD_ROWS
@@ -629,6 +670,10 @@ void loop() {
       Serial.print(busV, 2);
       Serial.print(F(" I="));
       Serial.print(currentA, 3);
+      Serial.print(F(" solar_A="));
+      Serial.print(inaSolar.currentA, 3);
+      Serial.print(F(" batt_A="));
+      Serial.print(inaBatt.currentA, 3);
       Serial.print(F(" thrust_g="));
       if (countsPerG != 0.0) {
         Serial.println(thrustG, 1);
