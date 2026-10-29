@@ -1,0 +1,23 @@
+ms,throttle_us,bus_V,current_A,power_W,energy_Wh,net_counts,thrust_g,solar_A,solar_W,solar_Wh,batt_V,batt_A,batt_W,batt_Wh
+# ready. connect the pack through the precharge lead, then send g
+# idle V=16.65 I=0.050 solar_A=-0.021 batt_A=0.070 thrust_g=NA counts=0
+# idle V=16.65 I=0.050 solar_A=-0.021 batt_A=0.069 thrust_g=NA counts=-4439
+# idle V=16.65 I=0.051 solar_A=-0.021 batt_A=0.070 thrust_g=NA counts=-4409
+# idle V=16.65 I=0.050 solar_A=-0.021 batt_A=0.070 thrust_g=NA counts=-4350
+# idle V=16.65 I=0.050 solar_A=-0.021 batt_A=0.070 thrust_g=NA counts=-4412
+# idle V=16.65 I=0.050 solar_A=-0.021 batt_A=0.069 thrust_g=NA counts=-4528
+# idle V=16.65 I=0.050 solar_A=-0.021 batt_A=0.070 thrust_g=NA counts=-4330
+# idle V=16.65 I=0.050 solar_A=-0.021 batt_A=0.070 thrust_g=NA counts=-4574
+# idle V=16.65 I=0.050 solar_A=-0.021 batt_A=0.070 thrust_g=NA counts=-4467
+# idle V=16.65 I=0.050 solar_A=-0.021 batt_A=0.070 thrust_g=NA counts=-4383
+# idle V=16.65 I=0.050 solar_A=-0.021 batt_A=0.069 thrust_g=NA counts=-4427
+# idle V=16.65 I=0.050 solar_A=-0.021 batt_A=0.069 thrust_g=NA counts=-4344
+# idle V=16.65 I=0.051 solar_A=-0.021 batt_A=0.070 thrust_g=NA counts=-4440
+# idle V=16.65 I=0.050 solar_A=-0.021 batt_A=0.069 thrust_g=NA counts=-4639
+# logging to RUN04.CSV
+ms,throttle_us,bus_V,current_A,power_W,energy_Wh,net_counts,thrust_g,solar_A,solar_W,solar_Wh,batt_V,batt_A,batt_W,batt_Wh
+# ready. connect the pack through the precharge lead, then send g
+# idle V=16.65 I=0.051 solar_A=-0.021 batt_A=0.070 thrust_g=NA counts=0
+# idle V=16.65 I=0.051 solar_A=-0.021 batt_A=0.070 thrust_g=NA counts=-3970
+# idle V=16.65 I=0.050 solar_A=-0.021 batt_A=0.070 thrust_g=NA counts=-4187
+# idle V=16.65 I=0.051 solar_A=-0.022 batt_A=0.070 thrust_g=NA counts=-3945

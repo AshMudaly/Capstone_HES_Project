@@ -77,7 +77,7 @@ const float MAX_THRUST_G       = 3000.0;  // load cell is 10 kg; only checked on
 // ---------- Sweep ----------
 // Nominal 1000 + 10 x percent. Check the Hobbywing throttle range if the motor does not respond as expected.
 const uint16_t THROTTLE_OFF_US = 1000;
-const uint16_t STEPS_US[]      = {1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000};
+const uint16_t STEPS_US[]      = {1200, 1300, 1400, 1500, 1600, 1700, 1800};
 const uint8_t  STEP_COUNT      = sizeof(STEPS_US) / sizeof(STEPS_US[0]);
 const uint32_t HOLD_MS         = 5000;
 const uint32_t ARM_MS          = 3000;   // ESC sees 1000 us for this long after 'g' before step 1
@@ -87,7 +87,7 @@ const uint32_t IDLE_PRINT_MS   = 1000;
 
 // Counts per gram. 0 = uncalibrated (thrust logs as NA, thrust cut-off off).
 // Calibrate with the c command, then paste the printed value here.
-const float COUNTS_PER_G = 0.0;
+const float COUNTS_PER_G = 200.0;
 
 enum State { IDLE, ARMING, RUNNING, STOPPED };
 
