@@ -4,8 +4,8 @@ $ErrorActionPreference = "Stop"
 if (-not (Test-Path platformio.ini)) { throw "Run this from the repository root" }
 
 # Bring back the old flag-bearing logger (deleted in the working tree) so it can be moved.
-git restore -- Prototyping/logger/main.cpp
-if ($LASTEXITCODE) { throw "git restore failed" }
+git checkout 1ae8672~1 -- Prototyping/logger/main.cpp
+if ($LASTEXITCODE) { throw "restoring the old logger from 1ae8672~1 failed" }
 
 # Check the files are what I think they are.
 $flags = 'HX_TIMING|NO_SD_ROWS|NO_SERIAL_ROWS|HOLD_PROFILE'
