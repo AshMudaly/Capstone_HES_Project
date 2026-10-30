@@ -1,0 +1,8 @@
+# cells=4 min_bus_V=12.0 max_current_A=12.0 hold_ms=5000 build=logger_nosd
+# solar_* is INA260 0x41, positive when the MPPT feeds the bus. batt_* is INA260 0x44, positive when the pack discharges.
+ms,throttle_us,bus_V,current_A,power_W,energy_Wh,net_counts,thrust_g,solar_A,solar_W,solar_Wh,batt_V,batt_A,batt_W,batt_Wh
+# counts_per_g=215.4500
+# STOP: sequence complete
+# energy_Wh: 0.200
+# solar_Wh: -0.003
+# batt_Wh: 0.204
