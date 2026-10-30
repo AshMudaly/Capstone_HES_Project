@@ -1,14 +1,11 @@
-// HX711 bit-level diagnostic. Read-only: no library, no ESC, no SD, no INA260.
-// Clocks the HX711 by hand exactly as the library does (interrupts off, 24 data pulses + 1 gain pulse).
-// One line per read:  <24 bits, first clocked first>  <value as signed 24-bit>  <longest SCK-high time in us, upper bound>
-// A reset inside the HX711 happens if SCK stays high for more than 60 us.
+// HX711 bit-level diagnostic (Read-only)
 #include <Arduino.h>
 
 const uint8_t HX_DT_PIN  = 2;
 const uint8_t HX_SCK_PIN = 3;
 
-// Extra time SCK is held high and low, in microseconds. 0 = as fast as the R4 can toggle (what the library does).
-// Test with the RATE switch at L. Keep it far below 60 us.
+// Extra time SCK is held high and low, in microseconds. 0 = as fast as the R4 can toggle (what the library does)
+
 const uint8_t PULSE_US = 15;
 
 void setup() {

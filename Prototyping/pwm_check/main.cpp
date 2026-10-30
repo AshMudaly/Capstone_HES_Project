@@ -1,16 +1,15 @@
 #include <Arduino.h>
 
-// Phase 1 battery-only logger for the solar-hybrid testbed.
-// Pack: Dogcom 4S1P Li-ion, 4 x INR21700-40T, no BMS (all protection is here, the ESC, and the 15 A fuse).
-//
-// Wiring (unchanged):
+
+// Wiring (check the system architecture diagram):
 //   D9  ESC signal (ESC red/BEC wire removed from the plug)
 //   D10 SD chip select, D11 MOSI, D12 MISO, D13 SCK
 //   D2  HX711 DT, D3 HX711 SCK
 //   A4/A5 INA260 SDA/SCL, INA260 on the ESC branch at address 0x40
 //
-// Libraries: SD. The HX711 and the INA260 are driven directly (see hxRead, readIna). The ESC pulse comes from a hardware
-// PWM timer (PwmOut), not the Servo library: the Servo timer interrupt made the I2C reads fail.
+// Libraries: SD. The HX711 and the INA260 are driven directly (see hxRead, readIna). 
+// The ESC pulse comes from a hardware and PWM timer (PwmOut), not the Servo library: 
+//the Servo timer interrupt made the I2C reads fail.
 //
 // Serial commands, 115200 baud:
 //   g        start the sweep (IDLE only; preflight checks run first)

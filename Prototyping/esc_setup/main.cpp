@@ -1,16 +1,6 @@
 #include <Arduino.h>
 
-// ESC setup helper for the Hobbywing Skywalker V2: throttle calibration and stick programming from the keyboard.
-// The Arduino plays the part of the transmitter stick. PROP OFF. Motor connected (the motor makes the beeps).
-//
 //   D9  ESC signal (ESC red BEC wire removed from the plug), GND to ESC signal ground
-//
-// Serial Monitor at 115200 baud, any line ending.
-//   u   2000 us  (stick to the top)
-//   d   1000 us  (stick to the bottom)
-//
-// Powers up at 1000 us. The ESC reads the stick position when the pack is connected, so send u BEFORE connecting
-// the pack when you want calibration or programming. Procedure: see the Phase 1 tab of the wiring page.
 
 #include "pwm.h"
 

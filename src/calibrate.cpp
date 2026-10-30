@@ -1,6 +1,5 @@
-// calibrate.cpp - guided load cell calibration for the thrust rig.
-// Keep the HX711 RATE switch where the thrust runs will use it (currently H).
-
+// calibrate.cpp guided load cell calibration for the thrust rig
+// Keep the HX711 RATE switch where the thrust runs will use it (currently H)
 #include <Arduino.h>
 
 constexpr uint8_t HX_DATA_PIN = 2;
@@ -18,7 +17,7 @@ struct Step {
   double grams;
 };
 
-// Replace a grams value with the kitchen-scale reading if that weight was measured.
+// Replace a grams value with the kitchen-scale reading if that weight was measured
 constexpr Step STEPS[] = {
     {"empty plate (tare)", 0},
     {"2 oz", 2 * G_PER_OZ},
@@ -36,7 +35,7 @@ constexpr size_t N_STEPS = sizeof(STEPS) / sizeof(STEPS[0]);
 static int32_t raw[SAMPLES];
 static int32_t sorted[SAMPLES];
 
-// Blocks until the HX711 has a conversion, then clocks out one 24-bit sample.
+// Blocks until HX711 has a conversion then clocks out one 24-bit sample
 static int32_t readRaw() {
   uint32_t t0 = millis();
   while (digitalRead(HX_DATA_PIN) == HIGH) {
@@ -54,7 +53,7 @@ static int32_t readRaw() {
     digitalWrite(HX_SCK_PIN, LOW);
     delayMicroseconds(HX_PULSE_US);
   }
-  digitalWrite(HX_SCK_PIN, HIGH);  // 25th pulse: next conversion is channel A, gain 128
+  digitalWrite(HX_SCK_PIN, HIGH);  // 25th pulse next conversion is channel A, gain 128
   delayMicroseconds(HX_PULSE_US);
   digitalWrite(HX_SCK_PIN, LOW);
   delayMicroseconds(HX_PULSE_US);
@@ -134,7 +133,7 @@ static void runCalibration() {
     Serial.println((long)(sorted[SAMPLES - 1] - tare));
   }
 
-  // Least-squares fit through zero over the loaded steps.
+  // Least-squares fit through zero over the loaded steps
   double smm = 0, smc = 0;
   for (size_t s = 0; s < N_STEPS; s++) {
     if (STEPS[s].grams > 0) {

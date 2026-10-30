@@ -1,8 +1,8 @@
-// ina_scan: confirms the three INA260 addresses before any power-side test. No pack, no panels, USB power only.
-// Software I2C on A4 (SDA) and A5 (SCL), same bit-banged routines as the logger, with the address as a parameter.
-// Expected: #1 0x40 (no jumpers), #2 0x41 (A0 bridged), #3 0x44 (A1 bridged).
+// ina_scan: confirms the three INA260 addresses before any power-side test. No pack, no panels, USB power only
+// Software I2C on A4 (SDA) and A5 (SCL), same bit-banged routines as the logger, with the address as a parameter
+// Expected: #1 0x40 (no jumpers), #2 0x41 (A0 bridged), #3 0x44 (A1 bridged)
 // Every 2 s it prints every address that answers (0x08 to 0x77), then reads manufacturer ID, bus voltage and current
-// from each expected board. Manufacturer ID must be 0x5449 (Texas Instruments).
+// from each expected board. Manufacturer ID must be 0x5449 (Texas Instruments)
 #include <Arduino.h>
 
 const uint8_t  SDA_PIN        = A4;
