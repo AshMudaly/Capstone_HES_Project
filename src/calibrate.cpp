@@ -1,9 +1,10 @@
 // calibrate.cpp - guided load cell calibration for the thrust rig.
+// Keep the HX711 RATE switch where the thrust runs will use it (currently H).
 
 #include <Arduino.h>
 
-constexpr uint8_t PIN_DATA = 2;
-constexpr uint8_t PIN_SCK = 3;
+constexpr uint8_t HX_DATA_PIN = 2;
+constexpr uint8_t HX_SCK_PIN = 3;
 constexpr uint32_t HX_PULSE_US = 25;  // same clocking as the logger
 constexpr uint32_t HX_TIMEOUT_MS = 1000;
 
@@ -38,7 +39,7 @@ static int32_t sorted[SAMPLES];
 // Blocks until the HX711 has a conversion, then clocks out one 24-bit sample.
 static int32_t readRaw() {
   uint32_t t0 = millis();
-  while (digitalRead(PIN_DATA) == HIGH) {
+  while (digitalRead(HX_DATA_PIN) == HIGH) {
     if (millis() - t0 > HX_TIMEOUT_MS) {
       Serial.println("# ERROR: HX711 not ready, check wiring. Halted.");
       while (true) {
@@ -47,15 +48,15 @@ static int32_t readRaw() {
   }
   uint32_t v = 0;
   for (uint8_t i = 0; i < 24; i++) {
-    digitalWrite(PIN_SCK, HIGH);
+    digitalWrite(HX_SCK_PIN, HIGH);
     delayMicroseconds(HX_PULSE_US);
-    v = (v << 1) | (uint32_t)digitalRead(PIN_DATA);  // read at end of high phase
-    digitalWrite(PIN_SCK, LOW);
+    v = (v << 1) | (uint32_t)digitalRead(HX_DATA_PIN);  // read at end of high phase
+    digitalWrite(HX_SCK_PIN, LOW);
     delayMicroseconds(HX_PULSE_US);
   }
-  digitalWrite(PIN_SCK, HIGH);  // 25th pulse: next conversion is channel A, gain 128
+  digitalWrite(HX_SCK_PIN, HIGH);  // 25th pulse: next conversion is channel A, gain 128
   delayMicroseconds(HX_PULSE_US);
-  digitalWrite(PIN_SCK, LOW);
+  digitalWrite(HX_SCK_PIN, LOW);
   delayMicroseconds(HX_PULSE_US);
   if (v & 0x800000UL) v |= 0xFF000000UL;  // sign-extend 24 bit
   return (int32_t)v;
@@ -173,9 +174,9 @@ void setup() {
   uint32_t t0 = millis();
   while (!Serial && millis() - t0 < 3000) {
   }
-  pinMode(PIN_SCK, OUTPUT);
-  digitalWrite(PIN_SCK, LOW);
-  pinMode(PIN_DATA, INPUT);
+  pinMode(HX_SCK_PIN, OUTPUT);
+  digitalWrite(HX_SCK_PIN, LOW);
+  pinMode(HX_DATA_PIN, INPUT);
   Serial.println("# build=calibrate");
 }
 
