@@ -1,15 +1,15 @@
 #include <Arduino.h>
 
-// Runs a motor throttle test and logs power, energy, and thrust to Serial and an SD card.
-// Connect the sensors and ESC, open Serial Monitor at 115200 baud, and send g to start.
-// Send t to zero the load cell, c<grams> to calibrate it (for example c500), or x to stop.
-// Each power-up creates a new RUNnn.CSV. CSV comment lines start with #.
-// To run at one throttle for longer, set STEPS_US to one value and increase HOLD_MS.
+// Runs a motor throttle test and logs power, energy, and thrust to Serial and an SD card
+// Connect the sensors and ESC, open Serial Monitor at 115200 baud, and send g to start
+// Send t to zero the load cell, c<grams> to calibrate it (for example c500), or x to stop
+// Each power-up creates a new RUNnn.CSV. CSV comment lines start with #
+// To run at one throttle for longer, set STEPS_US to one value and increase HOLD_MS
 
 #include "pwm.h"
 #include <SD.h>
 
-// Pin assignments for the ESC, SD card, and load cell, it will dioffer with your board and wiring. 
+// Pin assignments for the ESC, SD card, and load cell, it will dioffer with your board and wirin
 //The INA260 is on the ESC branch at address 0x40
 const uint8_t ESC_PIN    = 9;
 const uint8_t SD_CS_PIN  = 10;
@@ -340,7 +340,8 @@ bool inaWriteReg(uint8_t addr, uint8_t reg, uint16_t value) {
   return ok;
 }
 
-// Read sensor values and calculate signed power. Charging current is negative.
+// Read sensor values and calculate signed power. 
+// Charging current is negative.
 bool readIna(uint8_t addr, InaReading &r) {
   uint16_t bus = 0, cur = 0;
   if (!inaReadReg(addr, INA_REG_BUSV, bus) || !inaReadReg(addr, INA_REG_CUR, cur)) return false;

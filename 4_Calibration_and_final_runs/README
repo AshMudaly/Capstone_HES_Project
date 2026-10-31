@@ -1,0 +1,83 @@
+# Reported Runs: what each run is
+
+Ground testbed, solar-battery hybrid propulsion. All runs were done on 30 Oct 2026 with the SAME sweep and the SAME hardware. Run IDs (B1, H1 and so on) are the names used in the report and workbook. RUNnn is the SD-card file number.
+
+## Read this first
+
+- **The SD-card CSVs hold only the header and footer lines.** The logger was run as `logger_nosd` (no data rows written to SD), so the data rows exist only in the **serial capture (PlatformIO monitor log)**. Use the serial capture as the data record for each run.
+- **RUN numbers repeat across SD-card sessions.** The 29 Oct pilot card also has RUN numbers. A RUN number alone is not enough. Always give the date, or use the B/H ID.
+- **Only the runs below get B/H IDs.** Nothing from 29 Oct (pilot runs, no-propeller check) uses a B or H ID.
+
+## Common to every run
+
+| Item | Value |
+|---|---|
+| Profile | ESC at 1000 µs for 3 s (arming), then 1200, 1300, 1400, 1500, 1600, 1700 µs for 5 s each, about 33 s in total |
+| Stops | over 12 A, under 12.0 V, over-thrust, sensor read failure (all runs ended with `sequence complete`) |
+| Pack | Dogcom 4S Li-ion (4 × INR21700-40T), no BMS |
+| ESC / motor / prop | Hobbywing Skywalker 50 A V2, 2820SL 550 KV, APC 9×4.5E |
+| Sensors | INA260 at 0x40 (ESC), 0x41 address bridged (solar), 0x44 address bridged (battery) |
+| Thrust | COUNTS_PER_G 215.45 (calibrated 30 Oct) |
+| Step values | mean over the last 2.5 s of each 5 s step |
+| Irradiance | **not measured in any run** |
+
+## Battery-only baseline (no solar input; solar sensor reads about -0.35 W)
+
+| ID | File | Sent (AEDT)* | Start bus V (log) | Notes |
+|---|---|---|---|---|
+| B1 | RUN67 | 12:59 | 16.655 | Highest start voltage and highest ESC power at 1700 µs (56.7 W) |
+| B2 | RUN68 | 13:01 | 16.604 | |
+| B3 | RUN69 | 13:03 | 16.573 | |
+| B4 | RUN70 | 13:05 | 16.454 | Lowest start voltage |
+| B5 | RUN71 | 13:08 | 16.512 | Start cell voltages not recorded |
+
+Baseline mean ESC power at 1200 to 1700 µs: 3.7, 8.0, 14.1, 23.3, 37.7, 54.7 W. Run-to-run spread is about 3% per level.
+
+## Hybrid runs in the workbook (Victron charge setpoint 16.70 V, max charge current 4 A)
+
+| ID | File | Sent (AEDT)* | Whole-run solar share | Events |
+|---|---|---|---|---|
+| H1 | RUN75 | 13:43 | 73.3% | Gentle uncover (0.46 A surge). Lower share at 1400 to 1600 µs than H2 to H5, cause unknown |
+| H2 | RUN76 | 13:46 | 91.3% | Uncover surge 6.45 A (17.08 V terminal). One solar dropout at 1200 µs |
+| H3 | RUN77 | 13:51 | 88.3% | Uncover surge 4.83 A. One HX711 glitch sample during arming (skipped by the debounce) |
+| H4 | RUN78 | 13:57 | 87.1% | Idle bus settled at 16.59 to 16.61 V (others 16.68 to 16.69 V). Surge 6.30 A. Dropouts at 1200 and 1300 µs |
+| H5 | RUN79 | 14:01 | 84.3% | Surge 4.71 A. Two solar dropouts at 1300 µs |
+
+Mean H1 to H5: 84.9% (SD 6.9). Mean H2 to H5: 87.8% (SD 2.9). Solar share = solar energy ÷ ESC energy. Above 100% at a step means the excess charged the pack.
+
+## Extra hybrid runs (kept outside the workbook, decision 30 Oct)
+
+| ID | File | Sent (AEDT)* | Whole-run solar share | Events |
+|---|---|---|---|---|
+| H6 | RUN80 | 14:06 | 80.4% | Panels left uncovered, so no uncover surge |
+| H7 | RUN81 | 14:12 | 80.5% | Covered and uncovered slowly; surge 6.02 A. One HX711 glitch sample. One solar dropout |
+
+Mean H1 to H7: 83.6% (SD 6.1). Solar share fell from H2 to H6 and then held. The cause is unknown.
+
+## Runs from 30 Oct that are NOT reported runs
+
+| File | What it is | Use |
+|---|---|---|
+| RUN72 | Hybrid attempt with Victron setpoint 16.60 V, below the pack voltage. Solar did not deliver | Excluded. Keep as a record. It justifies the 16.70 V setpoint |
+| RUN73 | Idle check after the setpoint was raised to 16.70 V (passed) | Configuration check only |
+
+RUN66 and RUN74 are gaps in the numbering and are unexplained.
+
+## Quick lookup
+
+| I want | Go to |
+|---|---|
+| A baseline run | B1 to B5 = RUN67 to RUN71 |
+| A hybrid run used for the main results | H1 to H5 = RUN75 to RUN79 |
+| An extra hybrid run | H6, H7 = RUN80, RUN81 |
+| Why the Victron setpoint is 16.70 V | RUN72 (fail), RUN73 (pass) |
+| Thrust data | Calibrated runs only, 30 Oct (B1 to H7) |
+
+\* Times are approximate. They are when each log arrived in the working session, 0 to 3 minutes after the run, and are not logger clock times. Sydney was on daylight time (AEDT, UTC+11).
+
+## To confirm before submitting
+
+- Actual run times (replace the arrival times above).
+- Panel angles per run (the Setup sheet entries were turned into dates by Excel).
+- File names of the serial captures for each run (not yet seen).
+- Whether RUN72, RUN73, RUN80 and RUN81 are committed to git.
