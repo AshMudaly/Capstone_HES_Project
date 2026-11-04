@@ -49,7 +49,8 @@ Capstone_HES_Project/
 ├── 1_Prototyping/                 ESC set-up and first HX711 diagnostics (22 Oct)
 ├── 2_Redevelopment/               Diagnostic builds, logger variants, debugging run logs (22–27 Oct)
 ├── 3_Pilot_runs/                  Pilot hybrid and battery-only runs, run manifest (29 Oct)
-├── 4_Calibration_and_final_runs/  Load cell calibration, final logger, reported runs (30 Oct)
+├── 4_Calibration_and_final_runs/  Load cell calibration, final logger, SD card header/footer files (30 Oct)
+├── 5_Reported_data/               Per-run data, manifest and analysis workbook behind the report (30 Oct)
 ├── 3D Prints/                     3D printed parts for the rig
 ├── Solar Hybrid Testbed Wiring.md Wiring, fuse sizes and bring-up checks
 └── platformio.ini                 Build environments for all firmware
@@ -60,7 +61,12 @@ Capstone_HES_Project/
 | 1 | [1_Prototyping](1_Prototyping) | ESC programming from the keyboard, first look at the HX711 load cell amplifier |
 | 2 | [2_Redevelopment](2_Redevelopment) | Isolation of three faults: HX711 clock timing, I2C transfers aborting under interrupt load, and load cell outliers that appeared only when rows were written to the SD card |
 | 3 | [3_Pilot_runs](3_Pilot_runs) | Pilot runs that set the 1700 µs throttle cap and the Victron charge settings |
-| 4 | [4_Calibration_and_final_runs](4_Calibration_and_final_runs) | Calibration, final logger and the runs the report is based on |
+| 4 | [4_Calibration_and_final_runs](4_Calibration_and_final_runs) | Calibration, final logger and the SD card files for the reported runs (header and footer only) |
+| 5 | [5_Reported_data](5_Reported_data) | **The data behind the report:** one CSV per run (B1–B5, H1–H5), a manifest and the analysis workbook |
+
+## Finding the data behind the report
+
+Open [5_Reported_data](5_Reported_data). [`manifest.csv`](5_Reported_data/manifest.csv) lists each run with its label, condition, pack and cell voltages, energy totals and checksum. Run numbers repeat across SD card sessions, so cite runs by label (B1, H1 …). The report's analysis workbook is in the same folder.
 
 ## Build and upload
 
@@ -77,7 +83,7 @@ The Serial Monitor output is the data record for the final runs, so log it to a 
 ## Things to know before reusing anything
 
 - Run numbers (`RUNnn`) repeat across SD card sessions. Always cite a run with its date or its B/H label.
-- The final logger does not write data rows to the SD card, because row writes coincided with load cell glitches. The SD files hold only header and footer lines.
+- The final logger does not write data rows to the SD card, because row writes coincided with load cell glitches. The SD files hold only header and footer lines; the data rows are in [5_Reported_data](5_Reported_data).
 - The load cell was calibrated only for the 30 October runs. Earlier thrust values use an estimate or are absent.
 - There is no battery management system on the pack. Voltage limits are enforced in firmware and in the ESC settings only.
 

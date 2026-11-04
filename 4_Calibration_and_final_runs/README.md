@@ -8,7 +8,7 @@ Load cell calibration, the final logger firmware and the runs the report is base
 |---|---|
 | `calibrate` | Firmware used to calibrate the load cell |
 | Final logger | Cleaned `logger` source with the diagnostic code removed. This is the firmware that logged the reported runs |
-| Reported runs | SD card CSVs for RUN67 to RUN71 and RUN75 to RUN79 |
+| Reported runs | SD card CSVs for RUN67 to RUN71 and RUN75 to RUN79 (header and footer only). The data rows are in [`5_Reported_data`](../5_Reported_data) |
 | Calibration monitor log | Serial Monitor capture of the calibration session, 30 Oct |
 
 ## Run map
@@ -25,12 +25,12 @@ Run numbers (`RUNnn`) restart whenever the SD card is cleared, so a number alone
 
 ## Where the data is
 
-The final logger does not write data rows to the SD card. Writing rows coincided with load cell glitches (see stage 2), so each reported `RUNnn.CSV` holds only the header and footer lines. **The data rows are in the Serial Monitor captures**, one capture per run.
+The final logger does not write data rows to the SD card. Writing rows coincided with load cell glitches (see stage 2), so each reported `RUNnn.CSV` holds only the header and footer lines. **The data rows are in the Serial Monitor captures**, one capture per run. The rows for the reported runs are collected in [`5_Reported_data`](../5_Reported_data).
 
-Serial rows use the same CSV columns as the SD file:
+Serial rows use the same 15 CSV columns as the SD file header:
 
 ```
-ms, throttle_us, bus_V, current_A, power_W, energy_Wh, net_counts, thrust_g
+ms, throttle_us, bus_V, current_A, power_W, energy_Wh, net_counts, thrust_g, solar_A, solar_W, solar_Wh, batt_V, batt_A, batt_W, batt_Wh
 ```
 
 When loading a capture in pandas, keep only the header line and lines that start with a digit. This drops the PlatformIO preamble, which does not start with `#`. Lines before `# arming` are idle readings, not run data.

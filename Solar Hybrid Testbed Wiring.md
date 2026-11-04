@@ -1,265 +1,316 @@
-# Solar Hybrid Testbed Wiring
+# Solar Hybrid Testbed: Wiring and Bring-up
 
-4S Li-ion pack on a shared bus, built in three views. Figures marked *est.* are my scaling estimates and should be checked against your first readings.
+Wiring, configuration and bring-up procedure for the ground testbed described in the [main README](README.md). The testbed runs a brushless motor from a 4S Li-ion pack, a solar array through an MPPT charge controller, or both, on one shared DC bus, and logs voltage and current on every branch.
 
-## Build order
+> **Warning.** The pack has no battery management system (BMS). Nothing on the bus protects individual cells from overcharge, over-discharge or imbalance. Voltage limits are enforced only by the logger firmware, the ESC cutoff and the MPPT setpoint. Treat the charge settings below as a record of what this rig used, not as a recommended charging configuration.
 
-1. Buzz out both 30 A terminal blocks with the multimeter and link the ways you use, so each block is one node: Bus + and Bus −.
-2. Fused lead (built): pack − to Bus − way 1, and system XT60 + through the 15 A fuse holder to Bus + way 1. Fit the fuse last.
+## Contents
+
+1. [System overview](#1-system-overview)
+2. [Components](#2-components)
+3. [Power wiring](#3-power-wiring)
+4. [Logic wiring](#4-logic-wiring)
+5. [ESC calibration and settings](#5-esc-calibration-and-settings)
+6. [Solar branch and MPPT configuration](#6-solar-branch-and-mppt-configuration)
+7. [Load cell mounting and calibration](#7-load-cell-mounting-and-calibration)
+8. [Logger firmware and data format](#8-logger-firmware-and-data-format)
+9. [Bring-up procedure](#9-bring-up-procedure)
+10. [Test sweep](#10-test-sweep)
+11. [Typical values](#11-typical-values)
+12. [Common wiring faults](#12-common-wiring-faults)
+
+## 1. System overview
+
+Three branches meet at a shared bus, so the battery, the solar array and the ESC are joined at one node (Kirchhoff's current law). One INA260 current and voltage sensor sits on each branch.
+
+```
+ Solar string ─► MPPT ─► 25 A fuse ─► INA260 #2 (0x41) ─┐
+                                                        │
+ Pack ─► 15 A fuse ─► INA260 #3 (0x44), in series ──────┼─── Bus + ───► INA260 #1 (0x40) ─► ESC ─► motor
+                                                        │
+ Pack − ────────────── MPPT BAT − ──────────────────────┴─── Bus − ───────────────────────► ESC −
+```
+
+The bus is two 30 A terminal blocks, one for + and one for −. Each block is a single node, linked across the ways in use. Way 1 takes the pack, way 2 the ESC branch and way 3 the solar branch.
+
+The build has two stages:
+
+| Stage | Branches fitted | Purpose |
+|---|---|---|
+| Phase 1 | ESC branch and pack | Battery-only baseline |
+| Phase 2 | Solar branch added | Hybrid runs |
+
+## 2. Components
+
+| Part | Detail |
+|---|---|
+| Controller | Freenove Control Board V5 (Uno R4 WiFi layout, 5 V logic), powered from laptop USB only |
+| Pack | Dogcom 4S Li-ion, 4 × INR21700-40T, 4000 mAh, 59.2 Wh, no BMS. 16.8 V full, 12.0 V stop |
+| ESC | Hobbywing Skywalker 50 A V2 (label V2-UBEC, 3–6S, 5 V at 6 A) |
+| Motor and prop | Hobbywing Skywalker 2820SL 550 KV, APC 9×4.5E |
+| Solar array | 3 × GoFlex GFS-50 flexible panels (50 W each) in series |
+| MPPT | Victron SmartSolar 100/15 with Bluetooth |
+| Sensors | 3 × Adafruit INA260 (15 A, 36 V, 2 mΩ shunt) at 0x40, 0x41 and 0x44 |
+| Load cell | Makerverse 10 kg bar with an Adafruit HX711 amplifier |
+| Storage | SD card module (FAT32) on the SPI pins |
+| Protection | 15 A blade fuse in the pack lead, 25 A blade fuse in the MPPT battery lead |
+| Bus capacitor | 1000 µF 63 V across the ESC input |
+| Precharge lead | 10 Ω 5 W resistor in the + leg only, removable |
+
+Cable is 25 A tinned auto cable for the high-current paths and flexible fine-strand copper on the solar branch.
+
+## 3. Power wiring
+
+### 3.1 Phase 1 build order
+
+1. Check both terminal blocks with a multimeter and link the ways in use, so each block is one node. Barrier strips often do not join the screws along a row.
+2. Fused pack lead: pack − to Bus − way 1, and system XT60 + through the 15 A fuse holder to Bus + way 1. Fit the fuse last.
 3. ESC branch: Bus + way 2 to INA260 #1 VIN+, then VIN− to the ESC red lead. Bus − way 2 to the ESC black lead.
-4. Fit one 1000 µF 63 V capacitor across the ESC input, stripe leg to the black side, within about 5 cm of the ESC.
-5. Join the three ESC phase wires to the motor in any order. Prop off.
-6. Wire the signal lead to the Arduino (Logger tab). Leave Bus + way 3 and Bus − way 3 empty for Phase 2.
+4. Fit the 1000 µF capacitor across the ESC input, stripe leg to the black side, within about 5 cm of the ESC.
+5. Join the three ESC phase wires to the motor in any order. Leave the propeller off.
+6. Wire the ESC signal lead to the Arduino ([section 4](#4-logic-wiring)). Leave Bus + way 3 and Bus − way 3 empty until Phase 2.
 
-Pack current leaves +, passes the 15 A fuse and the ESC-branch sensor, and returns on −. Phase 2 plugs into the reserved way 3 on each block.
+### 3.2 Connection table
 
-## Connections
-
-| # | From | To | Cable and note |
-| --- | --- | --- | --- |
+| # | From | To | Note |
+|---|---|---|---|
 | 1 | Pack + (male XT60) | System XT60 + (rig side, female) | Use the precharge lead on every connect |
 | 2 | System XT60 + | Fuse holder 1 in (15 A) | 25 A cable, kept short |
-| 3 | Fuse holder 1 out | Bus + way 1 | 25 A cable |
+| 3 | Fuse holder 1 out | Bus + way 1 | 25 A cable. INA260 #3 is in series in this lead |
 | 4 | System XT60 − | Bus − way 1 | 25 A cable |
 | 5 | Bus + way 2 | INA260 #1 VIN+ | Current enters VIN+ |
 | 6 | INA260 #1 VIN− | ESC red | VIN− is the ESC side |
 | 7 | Bus − way 2 | ESC black | 25 A cable |
-| 8 | Capacitor + | ESC red node | 1000 µF 63 V, within 5 cm of the ESC |
-| 9 | Capacitor − (stripe) | ESC black node | Check the polarity twice |
+| 8 | Capacitor + | ESC red node | Within 5 cm of the ESC |
+| 9 | Capacitor − (stripe) | ESC black node | Check polarity twice |
 | 10 | ESC phase wires (3) | Motor wires (3) | Any order. Swap two to reverse the spin |
-| 11 | ESC signal and ground | Arduino D9 and GND | Red BEC wire removed (see Logger tab) |
-| 12 | Bus + way 3, Bus − way 3 | Empty | Reserved for the Phase 2 solar branch |
+| 11 | ESC signal and ground | Arduino D9 and GND | ESC red BEC wire removed |
 
-## Ballpark numbers
+ESC black goes straight to the − block and never passes through a sensor. Two wires must never share one INA260 terminal, or current bypasses the shunt.
 
-Pack voltage
+### 3.3 Precharge
 
-16.8 V full, 13.6 V minimum to start a sweep, 12.0 V stop.
+Before every pack connection, touch the pack to the system input through the precharge lead for 2 to 3 s, then connect the XT60 directly. This limits inrush into the bus capacitor.
 
-ESC branch
+### 3.4 Single ground path
 
-About 5–8 A at full throttle (est., ±40%). The sketch stops at 12 A.
+Logic ground and power negative must meet in one place only: the ESC signal ground. The Arduino is powered from USB only, and nothing from the bus connects to it.
 
-Limits
+### 3.5 Phase 2 solar branch
 
-INA260 15 A, pack fuse 15 A, 25 A cable.
+1. Join the panels in series: Panel 1 + to Panel 2 −, and Panel 2 + to Panel 3 −. Keep them covered and leave the two end leads free.
+2. Check the string in sun with nothing else connected: Voc about 29–32 V, Isc about 5–6 A.
+3. MPPT BAT+ to the 25 A fuse, to INA260 #2 VIN+, then VIN− to Bus + way 3. MPPT BAT− to Bus − way 3.
+4. Join the branch to way 3 on both blocks with the motor idle. The MPPT powers up from the pack, so this comes before the panels.
+5. Connect the string to PV − and PV + last, with the panels covered.
 
-Idle
+MPPT terminal strip, left to right:
 
-About 0.0x A with the motor off.
+| BATT + | BATT − | PV − | PV + | LOAD − | LOAD + |
+|---|---|---|---|---|---|
+| 25 A fuse, then INA260 #2 VIN+ | Bus − way 3 | String − | String + | Empty | Empty |
 
-## Where it goes wrong
+The VE.Direct port is unused. Mount the MPPT upright with terminals down, 10 cm clear above and below, within 3 m of the pack. Torque the BATT, PV and LOAD screws to 0.75 N·m.
 
-- INA260 direction. Current enters VIN+ and leaves VIN−, so swapped leads read negative.
-- Reversed capacitor or XT60 polarity can destroy the ESC.
-- Barrier strips often do not join the screws along a row. Confirm each node with the multimeter.
-- Loose screws and stray strands. Tug-test every wire and re-check after the first run.
-- One ground path only. Logic ground meets the power negative through the ESC signal ground and nowhere else.
+Rules for the solar side:
 
-## ESC setup, once prop off
+- Cover the panels before mating or unplugging any MC4 connector, and never unplug under load.
+- PV − goes to PV − only. Do not link it to BAT − or to ground.
+- INA260 #2 VIN+ faces the MPPT, so solar current reads positive.
+- Reverse battery polarity is not protected on the MPPT and is not covered by warranty. Check BATT + and − twice.
 
-**Calibrate first.** The Skywalker V2's default throttle range is 1100–1940 µs and the manual says to recalibrate for any new transmitter. Without it, the 1900 µs and 2000 µs sweep steps would be almost the same throttle.
+## 4. Logic wiring
 
-The Arduino plays the transmitter stick using `esc_setup.ino`. In the Serial Monitor at 115200, `u` sends 2000 µs (stick top) and `d` sends 1000 µs (stick bottom). Keep the motor connected, because the motor makes the beeps, and keep the prop off. The ESC reads the stick position at the moment the pack connects, so send the letter before connecting the pack, through the precharge lead as usual.
+### 4.1 Pin map
 
-## 1. Calibrate the throttle
+| Arduino pin | Connects to |
+|---|---|
+| 5V | INA260 VCC (all), HX711 VIN, SD VCC |
+| GND | INA260 GND (all), HX711 GND, SD GND, ESC signal ground |
+| A4 (SDA) | INA260 SDA, chained to all sensors |
+| A5 (SCL) | INA260 SCL, chained to all sensors |
+| D2 | HX711 DATA |
+| D3 | HX711 SCK |
+| D9 | ESC signal (hardware PWM) |
+| D10, D11, D12, D13 | SD CS, MOSI, MISO, SCK |
+| USB | Laptop: power, Serial Monitor at 115200 baud, commands and live rows |
+
+Not used: barrel jack, VIN, the ICSP header, the white 4-pin connector, and the SDA/SCL pins beside AREF. The white connector is the second I2C bus (`Wire1`) on a genuine Uno R4 WiFi.
+
+### 4.2 Rails
+
+The board has one 5V pin and three GND pins, so one 5 V rail and one GND rail are made on a small breadboard, each fed from a single board pin. All three INA260s, the HX711 and the SD module share these rails.
+
+### 4.3 INA260 notes
+
+- Addresses: #1 stays at 0x40 (ESC), #2 has the A0 solder bridge for 0x41 (solar), #3 has the A1 bridge for 0x44 (battery). Chain SDA, SCL, 5 V and GND from #1.
+- Only VCC, GND, SDA and SCL get header leads. The VB and Vin+ header pins stay unconnected.
+- Current enters VIN+ and leaves VIN−, so swapped leads read negative.
+- The sensors are read over bit-banged (software) I2C on A4 and A5, not the hardware `Wire` driver. The hardware driver aborted transfers under interrupt load (see [2_Redevelopment](2_Redevelopment)).
+- Each sensor averages 16 samples (about 35 ms windows) and the three are not sampled together.
+
+### 4.4 HX711 notes
+
+- VIN to the 5 V rail, GND to the GND rail, DATA to D2, SCK to D3. VIO stays unconnected.
+- Load cell: E+ red, E− black, A− white, A+ green on typical cells (check the label). B+ and B− are unused. If thrust reads negative, swap A+ and A−.
+- The final firmware clocks the HX711 directly (25 µs high, 25 µs low, 25 pulses per read, channel A, gain 128) rather than using a library. The RATE switch was moved to H (80 samples per second) on 30 October 2026, and the load cell was plugged into a different ground at about the same time.
+
+### 4.5 SD module
+
+Six wires: 5 V, GND and D10 to D13. A bare module needs an on-board regulator and level shifter. A stackable shield may use a different chip-select pin.
+
+## 5. ESC calibration and settings
+
+Do these once, with the propeller off.
+
+The Arduino plays the transmitter stick using the `esc_setup` environment. In the Serial Monitor at 115200 baud, `u` sends 2000 µs (stick top) and `d` sends 1000 µs (stick bottom). Keep the motor connected, because the motor makes the beeps. The ESC reads the stick position at the moment the pack connects, so send the letter before connecting the pack, through the precharge lead as usual.
+
+### 5.1 Calibrate the throttle
+
+The default throttle range is 1100–1940 µs. Without calibration, 1900 µs and 2000 µs would be almost the same throttle.
 
 1. Send `u`, then connect the pack.
 2. Wait for the start-up tone, then two short beeps.
 3. Within 5 s of those two beeps, send `d`.
-4. The ESC beeps the cell count (four for 4S), then one long beep. That is calibrated.
+4. The ESC beeps the cell count (four for 4S), then one long beep. The ESC is now calibrated.
 
-## 2. Program the settings
+### 5.2 Program the settings
 
-1. With the pack disconnected, send `u`, then connect the pack. After the two short beeps send nothing, and about 5 s later the programming tone plays.
-2. The item beeps repeat in a loop. When you hear the item you want, send `d` within 3 s.
-3. The value beeps loop. When you hear the value you want, send `u`. A tone confirms it and you return to the items.
-4. To finish, pick the Exit item (two long beeps and one short) with `d`. Settings only apply after you disconnect the pack and reconnect it.
+1. With the pack disconnected, send `u`, then connect the pack. After the two short beeps send nothing. About 5 s later the programming tone plays.
+2. The item beeps repeat in a loop. When the wanted item sounds, send `d` within 3 s.
+3. The value beeps loop. When the wanted value sounds, send `u`. A tone confirms it and the ESC returns to the item list.
+4. To finish, select the Exit item (two long beeps and one short) with `d`. Settings apply after the pack is disconnected and reconnected.
 
 | Item | Item beeps | Set to | Value beeps | Reason |
-| --- | --- | --- | --- | --- |
-| Voltage cutoff type | 3 short | Hard | 2 short | The pack has no BMS. The ESC is a backstop, and Soft only drops to 60% power and keeps running |
-| LiPo cells | 4 short | 4S | 3 short | Auto uses 3.7 V per cell, so a nearly flat 4S pack could read as 3S and set the cutoff far too low |
-| Cutoff voltage | 1 long | Low | 2 short | 2.8 V per cell is 11.2 V, below the sketch's 12.0 V stop. The default Medium is 3.0 V per cell, which is 12.0 V and would clash with the sketch |
-| All other items | — | Default | — | Brake off, start-up normal, timing medium, active freewheeling on, search off. Record them in your methods |
+|---|---|---|---|---|
+| Voltage cutoff type | 3 short | Hard | 2 short | No BMS. Soft only drops to 60% power and keeps running |
+| LiPo cells | 4 short | 4S | 3 short | Auto assumes 3.7 V per cell, so a nearly flat 4S pack could read as 3S and set the cutoff far too low |
+| Cutoff voltage | 1 long | Low | 2 short | 2.8 V per cell is 11.2 V, below the firmware's 12.0 V stop. The default Medium (3.0 V per cell, 12.0 V) would clash with it |
+| All other items | n/a | Default | n/a | Brake off, start-up normal, timing medium, active freewheeling on, search off |
 
-This follows the Skywalker V2 manual you sent. Your ESC label (V2-UBEC, 3–6S, 5 V at 6 A) differs from that manual's 50 A model (3–4S, 5 V at 5 A), so yours may be an older revision. If the beeps do not match the tables above, stop and check before changing anything.
+These beep tables follow the Skywalker V2 manual for the 50 A model (3–4S, 5 V at 5 A). The label on the unit used here (V2-UBEC, 3–6S, 5 V at 6 A) differs, so it may be an older revision. If the beeps do not match, stop and check before changing anything.
 
-## Power-up order
+### 5.3 ESC signal lead
 
-1. Upload the sketch, open the Serial Monitor at 115200 and wait for `# ready`. The ESC now sees 1000 µs.
-2. Touch the pack to the system input through the precharge lead for 2–3 s, then connect the XT60 directly. The ESC plays its start-up tone, then four beeps (4S), then one long beep.
-3. Read the idle line. Bus voltage should match the pack (13.6–16.8 V) and current should be about 0.0x A.
-4. Prop off: send `g`, check the spin direction and compare the INA260 readings with the multimeter at a low step.
-5. Fit the prop and run the sweep. `x` stops it at any time.
+Pull the red (BEC) wire out of the signal plug and insulate it. If ESC 5 V reached the Arduino rail while USB was connected, two supplies would conflict and could back-feed the laptop port.
 
-**Check before the panels go live.** The SmartSolar picks 12 V or 24 V once, on its first power-up (10 s wait, then an averaged reading), and the manual does not give the switching voltage. A full 4S pack sits at 16.8 V, so confirm in VictronConnect that the system voltage reads 12 V, and change it there if it does not. Reverse battery polarity is not protected and is not covered by warranty, so check BATT + and − twice.
+## 6. Solar branch and MPPT configuration
 
-## Phase 2 build order — blocked pending safety and firmware checks
+### 6.1 System voltage
 
-**Do not connect the PV string or run hybrid tests yet.** The pack has no BMS, so cell-level charge protection and balancing must be verified before charging. Also, the current logger reads only INA260 #1 at `0x40`; it cannot monitor INA260 #2 or #3 or validate hybrid current. The steps below are planning notes only until the pack charging safety is independently confirmed and Phase 2 firmware is implemented and tested.
+The SmartSolar selects 12 V or 24 V once, on its first power-up (10 s wait, then an averaged reading), and the manual does not give the switching voltage. A full 4S pack sits at 16.8 V. Confirm in VictronConnect that the system voltage reads 12 V, and set it by hand if it does not. The Windows version of VictronConnect has no Bluetooth.
 
-1. Join the panels in series: mate Panel 1 + to Panel 2 −, and Panel 2 + to Panel 3 −. Keep them covered and leave the two end leads free.
-2. Check the string in sun with nothing else connected: Voc about 29–32 V, Isc about 5–6 A.
-3. Build the solar branch off the bus: MPPT BAT+ to the 25 A fuse, to INA260 #2 VIN+, then VIN− to Bus + way 3. MPPT BAT− to Bus − way 3. Use flexible fine-strand copper. Leave the PV terminals empty.
-4. Bus join: connect the branch to way 3 on both blocks with the motor idle. The MPPT only powers up from the pack, so this comes before the panels.
-5. **Blocked:** do not configure the MPPT to charge this pack. After the pack protection is verified, use VictronConnect to check the system voltage and have the charge settings reviewed against the exact pack and cell specifications. The Windows version of the app has no Bluetooth.
-6. **Blocked:** do not connect the string to PV+ and PV− or uncover the panels until the charging safety checks above are complete.
-7. **Blocked:** do not run hybrid tests until Phase 2 firmware measures and logs the required sensor readings and the charge current limits have been verified.
+### 6.2 Charge settings used
 
-The complete shared-bus schematic. Amber parts are new in Phase 2, grey parts were built in Phase 1, and the dashed amber box is an optional third sensor.
+The charge setpoint is the battery-side regulation target. 24 V defaults are twice the 12 V defaults, so the 24 V defaults would give 28.8 V absorption, which is unsafe for a 4S Li-ion pack.
 
-## MPPT settings VictronConnect
-
-**Do not use these settings to charge the pack yet.** The pack has no BMS, and a pack-level voltage setting does not protect individual cells from overcharge or imbalance. Before connecting PV for charging, verify cell-level overvoltage protection and balancing are present and suitable, and confirm the charge limits against the exact cell and pack specifications. The values below are unverified notes, not an approved charging configuration.
-
-| Setting | Value | Reason |
-| --- | --- | --- |
-| Battery voltage | 12 V | 4S pack, 12–16.8 V. Set by hand if it detected 24 V |
-| Expert mode | On | Needed to edit absorption and float |
-| Battery preset | User defined | The lithium preset is 14.2 V absorption (LiFePO4) |
-| Absorption | 16.6 V | 4.15 V per cell, with no balancing |
-| Float | 16.0 V | Below absorption |
+| Setting | Value | Note |
+|---|---|---|
+| Battery voltage | 12 V | 4S pack, 12.0–16.8 V |
+| Battery preset | User defined | The lithium preset is a LiFePO4 profile (14.2 V absorption) |
+| Absorption | 16.70 V | 4.175 V per cell |
+| Float | 16.70 V | Set equal to absorption |
 | Equalisation | Off | Lithium |
-| Temp compensation | 0 mV/°C | The default −16 mV/°C is a lead-acid coefficient |
-| Absorption limit | 1 h, tail 0.4 A | My suggestion (about C/10). The manual default is 6 h |
-| Max charge current | 12 A | Keeps INA260 #2 under 15 A |
+| Temperature compensation | 0 mV/°C* | The default (−16 mV/°C) is a lead-acid coefficient |
+| Max charge current | 4 A | Hybrid runs |
 
-The manual does not list the settable voltage ranges. If the app rejects 16.6 V or 16.0 V, note the limit it shows. This does not establish that either value is safe for this pack.
+\* Planned value, not re-verified against the unit.
 
-## Fuses
+Findings from commissioning:
 
-| Fuse | Where | Note |
-| --- | --- | --- |
-| 15 A | Pack + lead, holder 1 | Built in Phase 1 |
-| 25 A | MPPT battery lead, holder 2 | Manual: 20 A min, 25 A max for the 100/15, even though the unit has its own 20 A blade fuse (the one in your photo). Replaces the earlier 15 A plan |
-| 30 A | Not installed | Above the 25 A cable rating |
+- A setpoint below the pack voltage makes the controller deliver nothing. A 16.60 V setpoint did this in RUN72, which was excluded from the results. Raising the setpoint to 16.70 V fixed it, confirmed by an idle test (RUN73).
+- The controller regulated the bus at 16.67 V for the 16.70 V setpoint (an offset of about 25 mV).
+- Uncovering the panels pushed 4.7 to 6.5 A into the pack for about a second, above the 4 A setting. The cell datasheet gives 2 A as the standard charge current.
 
-The unit's internal fuse blows on reverse battery polarity, and that is a fault, not protection you can rely on.
+### 6.3 Fuses
 
-## Terminal strip, left to right
+| Fuse | Location | Note |
+|---|---|---|
+| 15 A | Pack + lead, holder 1 | Phase 1 |
+| 25 A | MPPT battery lead, holder 2 | Manual: 20 A minimum, 25 A maximum for the 100/15. The unit also has its own internal 20 A blade fuse, which blows on reverse polarity and is not protection to rely on |
 
-| BATT + | BATT − | PV − | PV + | LOAD − | LOAD + |
-| --- | --- | --- | --- | --- | --- |
-| 25 A fuse, then INA260 #2 VIN+ | Bus − way 3 | String − | String + | Empty | Empty |
+A 30 A fuse is not installed because it is above the 25 A cable rating.
 
-This matches the labels on your unit. The VE.Direct port stays unused.
+## 7. Load cell mounting and calibration
 
-## Ballpark numbers
-
-PV string
-
-Voc 32.1 V, Vmp 27 V, Imp 5.7 A, Isc 6.1 A at STC.
-
-Start and run
-
-PV must exceed pack + 5 V to start (up to 21.8 V), then pack + 1 V.
-
-In sun
-
-About 100–130 W (est.), roughly 7–9 A at 14.4 V.
-
-Pack charge
-
-2 A standard and 4 A maximum, from the cell datasheet.
-
-Two sensors only
-
-Skip #3 and derive I_batt = I_ESC − I_solar.
-
-## Checks
-
-- Cover the panels before mating or unplugging any MC4 connector, and never unplug under load.
-- PV − goes to PV − only. Do not link it to BAT − or to ground, and do not ground the array.
-- INA260 #2 VIN+ faces the MPPT, so solar current reads positive.
-- With the branch joined and the panels covered, INA260 #2 reads about 0 A and the app shows no PV voltage.
-- Mount the MPPT upright with the terminals down, 10 cm clear above and below, within 3 m of the pack.
-- Torque BATT, PV and LOAD screws to 0.75 N·m and use flexible multi-strand copper.
-
-## Build order
-
-1. Install the libraries Adafruit INA260, HX711 (bogde), Servo and SD. Put the sketch in a folder named `phase1_logger_4s`.
-2. INA260 #1: solder the headers and wire VCC, GND, SDA and SCL as shown. The address stays 0x40.
-3. HX711 (Adafruit board): VIN to the 5 V rail, GND to the GND rail, DATA to D2, SCK to D3. Leave VIO and the RATE pin unconnected, and slide the RATE switch to L (10 SPS). Load cell to E+, E−, A− and A+ (red, black, white, green on typical cells, so check the label). If thrust later reads negative, swap A+ and A−.
-4. SD module: six wires as shown. A bare module needs an on-board regulator and level shifter. A stackable shield may use a different chip-select pin.
-5. ESC servo lead: signal to D9, ground to GND, and pull the red wire out of the plug and insulate it.
-6. Power the Arduino from USB only. Nothing from the bus goes to it, and the barrel jack and VIN stay unused.
-7. Phase 2: INA260 #2 gets the A0 solder bridge (0x41) and #3 gets A1 (0x44). Chain their SDA, SCL, 5 V and GND from #1.
-
-Everything the Arduino talks to. The INA260 VIN+ and VIN− terminals are the power path and appear in the Phase 1 and Phase 2 drawings.
-
-## Pin map
-
-| Arduino pin | Goes to | Where on your board |
-| --- | --- | --- |
-| 5V | INA260 VCC (all), HX711 VIN, SD VCC | POWER header, left edge. Only one 5V pin, so feed a rail |
-| GND | INA260 GND (all), HX711 GND, SD GND, ESC signal ground | POWER header (two GND pins) or the GND beside AREF, top right. Feed a rail |
-| A4 (SDA) | INA260 SDA, chained to all sensors | ANALOG IN header, bottom left |
-| A5 (SCL) | INA260 SCL, chained to all sensors | ANALOG IN header, bottom left |
-| D2 / D3 | HX711 DATA / SCK | DIGITAL header, lower group (7 down to 0) |
-| D9 | ESC signal | DIGITAL header, upper group (13 down to 8), marked \~9 |
-| D10 / D11 / D12 / D13 | SD CS / MOSI / MISO / SCK | DIGITAL header, upper group |
-| USB | Laptop: power, Serial Monitor at 115200, live rows and commands | USB-C, top edge |
-| Not used | Nothing | Barrel jack, VIN, the ICSP header, the white 4-pin connector on the bottom edge, and the SDA/SCL pins beside AREF |
-
-**Rails.** With all three INA260s fitted you need five 5 V and six GND connections (three and four in Phase 1), but the board has one 5V pin and three GND pins. Make one 5 V rail and one GND rail with a small breadboard or a Wago splice each, fed from one 5V pin and one GND pin. Keep a single GND rail, so the ESC signal ground stays the only link to the power negative.
-
-**Do not use the white 4-pin connector.** On the genuine Uno R4 WiFi it is a second I2C bus (`Wire1`), which this sketch does not read, and I could not confirm that your Freenove board differs. Stay on A4 and A5.
-
-## Load cell mounting
+### 7.1 Mounting
 
 - Bolt the fixed end of the bar to a rigid base on spacers. The motor plate goes on the free end and nothing else touches it.
 - Point the sensing arrow along the thrust direction.
-- Keep the HX711 next to the cell, twist the four cell wires and route them at least 10 cm from the motor and ESC wires.
-- Keep the prop at least 25 cm from walls and the table, with the airflow away from the cell and the wiring.
+- Keep the HX711 next to the cell. Twist the four cell wires and route them at least 10 cm from the motor and ESC wires.
+- Keep the propeller at least 25 cm from walls and the table, with the airflow directed away from the cell and its wiring.
 
-## Calibrate and log
+### 7.2 Calibration
 
-1. With the motor mounted and no thrust, send `t` to tare.
-2. Put a known mass on the cell in the thrust direction and send `c500` for 500 g.
-3. Copy the printed `COUNTS_PER_G` into the sketch for later runs. Flip its sign if thrust reads negative.
-4. Send `g` to start. Each power-up writes a new `RUNnn.CSV` to the card, and the Serial Monitor shows the same rows.
+1. With the motor mounted and no thrust, send `t` to tare. The tare lives in RAM and resets on every boot.
+2. Apply a known mass in the thrust direction and send `c<grams>` (for example `c500`) promptly. The sketch waits only 0.2 s for the number after the `c`.
+3. Copy the printed `COUNTS_PER_G` into the logger source and rebuild. A reset wipes the RAM value.
+4. Apply a different known mass and check that `thrust_g` reads within a few percent, and returns to about 0 when removed.
 
-## CSV columns
+The reported runs use 215.45 counts per gram, stored as −215.45 in the firmware so that propeller thrust reads positive. Calibration masses were weighed on a kitchen scale first.
+
+## 8. Logger firmware and data format
+
+Build with PlatformIO in VS Code. The environment name in the bottom bar selects the firmware (`logger`, `logger_nosd` or `esc_setup`). Close the Serial Monitor before uploading, because it holds the USB port.
+
+Serial commands:
+
+| Command | Action |
+|---|---|
+| `t` | Tare the load cell (send before every run, with nothing touching the cell) |
+| `c<grams>` | Calibrate against a known mass |
+| `g` | Start the sweep |
+| `x` | Stop |
+
+Each reset opens a new `RUNnn.CSV` (RUN00 to RUN99), so run numbers repeat across SD card sessions. Always cite a run with its date or label.
+
+### 8.1 CSV columns
+
+Lines starting with `#` are comments.
 
 | Column | Meaning |
-| --- | --- |
-| ms | Milliseconds since power-up |
-| throttle_us | Throttle pulse in force when the row was sampled |
-| bus_V, current_A, power_W | INA260 #1 on the ESC branch |
-| energy_Wh | Energy delivered since the sweep started |
-| net_counts, thrust_g | HX711 counts after tare, and thrust once calibrated (NA before) |
+|---|---|
+| `ms` | Milliseconds since power-up. Use this as the time axis, not an assumed 100 ms step |
+| `throttle_us` | Throttle pulse in force when the row was sampled |
+| `bus_V`, `current_A`, `power_W` | INA260 #1, ESC branch |
+| `energy_Wh` | Energy delivered to the ESC since the sweep started |
+| `net_counts`, `thrust_g` | HX711 counts after tare, and calibrated thrust (`NA` before calibration) |
+| `solar_A`, `solar_W`, `solar_Wh` | INA260 #2, solar branch. Positive when the solar branch supplies the bus |
+| `batt_V`, `batt_A`, `batt_W`, `batt_Wh` | INA260 #3, pack. Negative current means the pack is charging |
 
-Lines starting with `#` are comments. The Phase 1 sketch reads one INA260. Phase 2 needs an updated sketch that also reads 0x41 and 0x44.
+### 8.2 Where the data is
 
-Two test cases. Test case 1 checks that the software logs correctly, with no motor. Test case 2 brings in the ESC, motor, load cell and propeller. Do not start test case 2 until every pass box in test case 1 is ticked. These checks do not certify the wiring as safe.
+The `logger_nosd` environment does not write data rows to the SD card, because row writes coincided with load cell glitches. The SD file holds only the header and footer lines, and the data rows are in the Serial Monitor output. Log the monitor to a file:
 
-## What is plugged in at each stage
+```
+pio device monitor --environment logger_nosd --port COM3 -f log2file
+```
 
-| Stage | Sketch | USB | Pack | Motor | Prop |
-| --- | --- | --- | --- | --- | --- |
-| 1A Software check | logger | Yes | No | No | No |
-| 1B Smoke test | logger | Yes | Yes, through the bulb | No | No |
-| 2A ESC setup | esc_setup | Yes | Yes, precharge lead then direct | Yes | No |
-| 2B First spin | logger | Yes | Yes, precharge lead then direct | Yes | No |
-| 2C Load cell | logger | Yes | No | Mounted | No |
-| 2D Propeller sweep | logger | Yes | Yes, precharge lead then direct | Yes | Yes |
+When loading a capture in pandas, keep the header line and lines that start with a digit, which drops the PlatformIO preamble. Only rows after `# arming` are run data.
 
-## Using the VS Code monitor
+## 9. Bring-up procedure
 
-- **Select the sketch:** the environment name in the bottom bar (logger or esc_setup) decides what gets built. Click the check mark to build and the arrow to upload.
-- **Open the monitor:** click the plug icon in the bottom bar. A terminal opens at 115200 baud. Whatever you type in it goes to the Arduino, one key at a time, with no Enter needed.
-- **Close it before uploading:** the monitor holds the USB port, and an upload fails while it is open.
-- **RESET:** press the red button to restart the sketch and see its boot text from the start. The monitor may drop and need reopening afterwards.
-- **Backup copy of the data:** `pio device monitor --filter log2file` in the VS Code terminal also saves everything the Arduino prints to a log file in the project folder.
+Complete each stage before starting the next. These checks do not certify the wiring as safe.
 
-## Test case 1: smoke test and software check
+| Stage | Firmware | USB | Pack | Motor | Prop |
+|---|---|---|---|---|---|
+| 1A Software check | `logger` | Yes | No | No | No |
+| 1B Smoke test | `logger` | Yes | Yes, through a 12 V car bulb | No | No |
+| 2A ESC setup | `esc_setup` | Yes | Yes, precharge then direct | Yes | No |
+| 2B First spin | `logger` | Yes | Yes, precharge then direct | Yes | No |
+| 2C Load cell | `logger` | Yes | No | Mounted | No |
+| 2D Propeller sweep | `logger` | Yes | Yes, precharge then direct | Yes | Yes |
 
-### 1A. USB only, no pack, no motor
+### 9.1 Before first power
 
-1. Check the SD card is FAT32 and in the module, the motor and ESC power are disconnected, and the pack is out.
-2. With the logger environment selected, plug in USB, open the monitor and press RESET.
-3. You should see this boot text:
+- Buzz out the bus: a steady beep between + and − is a fault. A reading that climbs and settles at OL is the capacitor charging.
+- Check for loose strands, bare solder blobs and stray wire across the + strip, and tug-test every screw and splice.
+- Confirm capacitor and XT60 polarity. Reversed polarity can destroy the ESC.
+- With USB only, the 5 V and GND rails must not beep to each other, and each module's power pins should read about 5 V.
+
+### 9.2 Stage 1A: USB only
+
+With the pack and motor disconnected, upload the logger, open the monitor and reset. Expected boot text:
 
 ```
 # logging to RUN00.CSV
@@ -268,91 +319,67 @@ ms,throttle_us,bus_V,current_A,power_W,energy_Wh,net_counts,thrust_g
 # idle V=0.00 I=0.000 thrust_g=NA counts=3
 ```
 
-4. Press gently on the load cell. The `counts=` value should move and settle when you let go.
-5. Type `t`. It prints `# load cell tared` and the counts return to about 0.
-6. Type `g`. With no pack this must refuse:
+Press the load cell and check that `counts=` moves and settles. Send `t` to zero it. Send `g` with no pack and confirm it refuses to start. Send `x` to stop.
 
-```
-# NOT STARTED: bus voltage too low (pack flat or not connected)
-```
+Failure messages: `INA260 not found` points to SDA, SCL or sensor power. `SD init failed` points to the card format or the SPI wires. `HX711 not responding` points to DATA, SCK or its power.
 
-7. Type `x`. It prints `# STOP: operator` and `# energy_Wh: 0.000`, and the file is closed. Unplug USB, take the SD card out and open it on the laptop. `RUN00.CSV` should exist and contain a `# cells=4 ...` comment line and the header.
+### 9.3 Stage 1B: smoke test
 
-**Pass:** the boot text appears with no halt message, the counts move, `g` is refused with no pack, and the CSV file is on the card.
+With the motor disconnected, fit a 12 V car bulb in series in the pack + lead in place of the precharge lead, keeping the 15 A fuse in circuit. A mains bulb stays dark at 16.8 V even on a short and proves nothing. Connect the pack: the bulb should flash briefly while the capacitors charge, then go dark. The idle line should show the pack voltage and a current near 0.05 A. Check the bus voltage against a multimeter (within about 0.05 V).
 
-**If it halts:** `INA260 not found` means SDA and SCL or its power. `SD init failed` means the card format or the CS, MOSI, MISO and SCK wires. `HX711 not responding` means DATA, SCK or its power. Nothing printing at all means the wrong port or baud rate. Fix that one thing, press RESET, and repeat.
+Disconnect the pack at once if the bulb stays lit, the idle voltage reads about 0 with the pack connected, anything smells, or anything warms.
 
-### 1B. Smoke test with the bulb, motor still disconnected
+### 9.4 Stage 2A to 2D
 
-1. Prop off and motor wires disconnected. Fit the bulb in series in the pack + lead, in place of the precharge lead, with the 15 A fuse still in the circuit. The bulb must be a 12 V car-type bulb. A mains bulb stays dark at 16.8 V even on a dead short, so it would prove nothing.
-2. With USB connected, the monitor open and the board reset, connect the pack. The bulb should flash briefly while the capacitors charge, then go dark.
-3. The idle line should now show the pack voltage and a tiny current:
+- **2A:** run the ESC calibration and settings in [section 5](#5-esc-calibration-and-settings), then switch back to the logger.
+- **2B:** with the motor clamped and the propeller off, start a sweep. Check the spin direction, smooth running, and that current rises with each step. If the direction is wrong, disconnect the pack and swap any two motor wires. Press reset before the next run.
+- **2C:** calibrate the load cell ([section 7.2](#72-calibration)) with USB only.
+- **2D:** do not run the propeller sweep until the prop-off test confirms INA260 #1 reads positive current under load. Fit the propeller with the rig clamped and the guard in place. After the run, disconnect the pack and check the ESC, motor and pack for heat.
 
-```
-# idle V=16.52 I=0.041 thrust_g=NA counts=3
-```
+For each run, record the log file, the date, the firmware environment, the idle voltage before the run, the ESC settings, whether it was battery-only or hybrid, and any events.
 
-4. Measure the bus voltage with the multimeter. It should agree with the idle line within about 0.05 V.
-5. Type `g`. The sketch holds 1000 µs for 3 s, then steps the throttle signal 1200 to 2000 µs for 5 s each, about 48 s in all, and prints a row every 100 ms:
+### 9.5 Hybrid runs
 
-```
-# arming, ESC held at 1000 us
-41230,1200,16.512,0.041,0.68,0.0000,15,NA
-...
-# STOP: sequence complete
-# energy_Wh: 0.009
-```
+Before connecting the PV string, confirm the MPPT system voltage ([section 6.1](#61-system-voltage)) and the charge settings ([section 6.2](#62-charge-settings-used)). Battery-only runs are made with the panels covered. For hybrid runs the panels are uncovered. Irradiance was not measured in any run.
 
-6. Disconnect the pack, then USB, take the SD card out and open `RUN01.CSV`.
+## 10. Test sweep
 
-**Pass:** the bulb flashes and goes dark, the voltage matches your meter, the sweep reaches `sequence complete`, and the CSV has about 480 rows. `throttle_us` steps from 1000 to 2000, `ms` (time since the board booted) advances in steps of about 100, `bus_V` is steady, and `current_A` stays near zero.
+| Phase | Throttle | Duration |
+|---|---|---|
+| Arm | 1000 µs | 3 s |
+| Steps | 1200, 1300, 1400, 1500, 1600, 1700 µs | 5 s each |
 
-**Unplug the pack at once if:** the bulb stays lit, the idle voltage reads about 0 with the pack connected, anything smells, or anything gets warm.
+One CSV row is logged about every 100 ms, so a full sweep takes about 33 s. The logger refuses to start below 13.6 V or above 16.9 V.
 
-## Test case 2: ESC, motor, current and thrust
+The sweep ends on whichever comes first:
 
-### 2A. ESC calibration and settings (once)
+- sequence complete
+- current above 12 A (ESC sensor)
+- bus voltage below 12.0 V
+- thrust above 3000 g for five consecutive samples
+- a sensor read failure
+- `x` from the operator
 
-Select the esc_setup environment, upload, open the monitor, and follow the "ESC setup, once" section on the Phase 1 tab. Motor connected, prop off, pack through the precharge lead. You must hear four beeps and a long beep at the end. Then switch back to the logger environment and upload it.
+The throttle is capped at 1700 µs because 1800 µs produced a current surge in the pilot runs. The 12 A stop guards sustained ESC current only. Brief step-edge peaks are not reliable, because the sensors are not sampled together.
 
-### 2B. First spin, prop off
+## 11. Typical values
 
-1. Motor connected to the ESC, prop off, motor clamped so it can't move. Logger uploaded, monitor open, board reset, `# ready` showing.
-2. Touch the pack to the system input through the precharge lead for 2 to 3 s, then connect the XT60 directly. The ESC plays its start-up tone, four beeps and a long beep.
-3. The idle line should show the pack voltage and about 0.0x A. Check the voltage against your meter.
-4. Type `g`. After 3 s the motor starts on the first step. Watch the direction, the smoothness, and the `current` value rising with each step. Type `x` after a few steps, or let it complete. Once a run has ended the sketch does nothing more, so press RESET before the next run.
-5. If the direction is wrong, disconnect the pack and swap any two of the three motor wires.
+| Quantity | Value |
+|---|---|
+| Pack voltage | 16.8 V full, 13.6 V minimum to start a sweep, 12.0 V stop |
+| Idle ESC current (motor connected, throttle at 1000 µs) | about 0.05 A at about 16.6 V |
+| Battery-only ESC power, 1200 to 1700 µs | 3.7, 8.0, 14.1, 23.3, 37.7 and 54.7 W |
+| Peak solar power at 1700 µs | about 52 W (3.1 A), against 150 W nominal |
+| PV string at STC | Voc 32.1 V, Vmp 27 V, Imp 5.7 A, Isc 6.1 A |
+| MPPT start condition | PV above pack + 5 V (up to 21.8 V), then pack + 1 V |
+| Current limits | INA260 15 A, pack fuse 15 A, 25 A cable |
 
-**Pass:** correct direction, smooth at every step, current reading positive and rising with throttle while staying low with no prop (a few amps at most, my estimate), the bus voltage steady, and nothing getting hot. If current is negative, does not respond as expected, or is inconsistent with the meter, stop, disconnect the pack, and correct/check sensor orientation and wiring. Do not proceed to the propeller test until current reads positive and the cutoff has been verified.
+## 12. Common wiring faults
 
-### 2C. Load cell calibration (USB only, no pack)
-
-1. Motor mounted on the load cell in its final position, prop off. Reset the board and type `t`.
-2. Apply a known mass along the thrust direction, for example 500 g, and type `c500` quickly, because the sketch waits only 0.2 s for the number to follow the `c`. If it answers `# calibrate: give a positive mass in grams`, you typed too slowly: try again, or paste `c500` with a right-click in the terminal. It prints `# COUNTS_PER_G = ...`.
-3. Remove the mass and apply a different known one, for example 200 g. The idle line's `thrust_g` should now read close to it.
-4. Copy the printed value into `COUNTS_PER_G` in `src/logger/main.cpp` (keep a minus sign if it has one), then rebuild and upload. A reset wipes the RAM value, so skipping this step loses the calibration.
-
-**Pass:** the second mass reads within a few percent, and the reading returns to about 0 when you remove it.
-
-### 2D. Propeller sweep
-
-**Do not run this test until the prop-off test confirms that INA260 #1 reads positive current under load and the logger version with the magnitude-based 12 A cutoff is uploaded.** Do not deliberately exceed the cutoff to test it; correct sensor orientation is still required for meaningful data.
-
-1. Fit the 9×4.5E prop with the rig clamped, the guard in place, and your safety checklist done. Reset the board and confirm `# ready`.
-2. Connect the pack through the precharge lead, then direct. Check the idle line.
-3. Type `g`. The sweep ends by itself on `over current` (above 12 A), `under voltage` (below 12.0 V), `over thrust` (above 3000 g), or `sequence complete`. `x` stops it at any time.
-4. Disconnect the pack straight afterwards and feel the ESC, motor and pack for heat. Then take the SD card out.
-5. Write down the run file name, the idle voltage before the run, the prop and the ESC settings in your lab notes.
-
-**Pass:** the sweep completes, or stops for a reason you can explain. Thrust and positive current both rise with each step, the current stays under 12 A (I estimated 5–8 A at full throttle), and the CSV is complete.
-
-## Reading the data
-
-Copy each `RUNnn.CSV` into the `data/` folder. Lines starting with `#` are comments, so in Python:
-
-```
-import pandas as pd
-df = pd.read_csv("data/RUN03.CSV", comment="#")
-```
-
-Each reset creates a new file, numbered RUN00 to RUN99, so keep a note of which run was which test.
+- **INA260 direction.** Current enters VIN+ and leaves VIN−, so swapped leads read negative.
+- **Reversed capacitor or XT60 polarity** can destroy the ESC.
+- **Barrier strips** often do not join the screws along a row. Confirm each node with a multimeter.
+- **Loose screws and stray strands.** Tug-test every wire and re-check after the first run.
+- **More than one ground path.** Logic ground meets power negative through the ESC signal ground and nowhere else.
+- **ESC BEC wire left in the signal plug**, which puts a second 5 V supply on the logic rail.
+- **Two wires on one INA260 terminal.** Current then bypasses the shunt and the sensor under-reads.
