@@ -2,7 +2,7 @@
 
 Firmware, run logs and test records for a ground-based testbed that measures how much of a lightweight RC aircraft's propulsion power a solar panel array can supply alongside a battery.
 
-> **Research question:** What share of a lightweight RC aircraft's propulsion power can solar supply?
+> **Research question:** What share of a lightweight RC aircraft’s motor can a solar array supply when it shares a direct-current (DC) bus with a Li-ion battery?
 
 UTS Mechatronics capstone project, 2026. Nothing here flies: the rig clamps a brushless motor and propeller to a bench, sweeps the throttle, and logs voltage and current on each branch of the power system.
 
